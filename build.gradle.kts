@@ -48,6 +48,7 @@ tasks {
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
+    implementation("com.github.vlsi.mxgraph:jgraphx:4.2.2")
 }
 
 kotlin {
