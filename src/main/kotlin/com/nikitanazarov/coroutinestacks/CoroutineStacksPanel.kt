@@ -6,44 +6,21 @@ import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.impl.DebuggerManagerListener
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.JBColor
-import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanelWithEmptyText
-import com.intellij.ui.components.JBScrollPane
+import com.mxgraph.swing.mxGraphComponent
+import com.mxgraph.util.mxConstants
+import com.mxgraph.view.mxGraph
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.proxy.CoroutineDebugProbesProxy
-import java.awt.Component
-import java.awt.Dimension
-import java.util.*
-import javax.swing.*
-
+import java.awt.BorderLayout
+import javax.swing.JComponent
+import com.intellij.util.ui.UIUtil
 
 class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
-    private val cellRenderer = object : DefaultListCellRenderer() {
-        private val ITEM_BORDER = BorderFactory.createMatteBorder(0, 0, 1, 0, JBColor.GRAY)
-
-        override fun getListCellRendererComponent(
-            list: JList<*>,
-            value: Any,
-            index: Int,
-            isSelected: Boolean,
-            cellHasFocus: Boolean
-        ): Component {
-            val renderer = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-            if (index < list.model.size - 1) {
-                (renderer as? JComponent)?.border = ITEM_BORDER
-            } else {
-                (renderer as? JComponent)?.border = null
-            }
-            return renderer
-        }
-    }
-
-    private val coroutineGraph = Box.createVerticalBox()
+    private var coroutineGraph: JComponent? = null
 
     init {
-        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        layout = BorderLayout()
         emptyText.text = CoroutineStacksBundle.message("no.java.debug.process.is.running")
         project.messageBus.connect()
             .subscribe<DebuggerManagerListener>(DebuggerManagerListener.TOPIC, object : DebuggerManagerListener {
@@ -54,12 +31,14 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
                 override fun sessionCreated(session: DebuggerSession) {
                     session.process.addDebugProcessListener(object : DebugProcessListener {
                         override fun paused(suspendContext: SuspendContext) {
+                            println("paused")
                             emptyText.component.isVisible = false
                             buildCoroutineGraph(suspendContext)
                         }
 
                         override fun resumed(suspendContext: SuspendContext?) {
-                            coroutineGraph.removeAll()
+                            println("resumed")
+                            remove(coroutineGraph)
                         }
                     })
                 }
@@ -67,252 +46,199 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
                 override fun sessionRemoved(session: DebuggerSession) {
                     emptyText.text = CoroutineStacksBundle.message("no.java.debug.process.is.running")
                     emptyText.component.isVisible = true
-                    coroutineGraph.removeAll()
+                    remove(coroutineGraph)
                 }
             })
     }
 
     private fun buildCoroutineGraph(suspendContext: SuspendContext) {
-        val suspendContextImpl = suspendContext as? SuspendContextImpl ?: run {
-            emptyText.text = CoroutineStacksBundle.message("coroutine.stacks.could.not.be.built")
-            return
-        }
-        val coroutineInfoCache = CoroutineDebugProbesProxy(suspendContextImpl).dumpCoroutines()
+
+        val coroutineInfoCache = CoroutineDebugProbesProxy(suspendContext as SuspendContextImpl).dumpCoroutines()
 
         val coroutineInfoDataList = coroutineInfoCache.cache
-        val dispatchers = mutableSetOf<String>()
 
-        val dispatcherToCoroutineDataList = mutableMapOf<String, MutableList<CoroutineInfoData>>()
-
-        for (info in coroutineInfoDataList) {
-            val dispatcher = info.descriptor.dispatcher ?: continue
-            dispatcherToCoroutineDataList.computeIfAbsent(dispatcher) { mutableListOf() }.add(info)
-            dispatchers.add(dispatcher)
+        for (i in coroutineInfoDataList) {
+            println("coroutineInfoDataList (Active Thread): ${i.activeThread}")
+            println("coroutineInfoDataList (Creation Stack Trace): ${i.creationStackTrace}")
+            println("coroutineInfoDataList (Stack Trace): ${i.stackTrace}")
+            println("coroutineInfoDataList (descriptor): ${i.descriptor}")
+            println("coroutineInfoDataList (Top Frame Variables): ${i.topFrameVariables}")
+            println()
         }
 
-        val dispatcherToCoroutineStacksTree = mutableMapOf<String, Tree<CoroutineStacksNode>>()
+        println("cache state: ${coroutineInfoCache.state}")
 
-        for (dispatcher in dispatchers) {
-            val rootValue =
-                CoroutineStacksNode(stackTrace = mutableListOf(), additionalData = dispatcherToCoroutineDataList[dispatcher]!!)
-            val tree = Tree(TreeNode(rootValue))
-
-
-            generateParallelStackTree(tree, rootValue, 0)
-
-            printTree(tree.root, 0)
-
-            dispatcherToCoroutineStacksTree[dispatcher] = tree
+        val graph = mxGraph()
+        with(graph) {
+            isCellsLocked = true
+            val parent = graph.defaultParent
+            model.beginUpdate()
+            try {
+                for (i in 1..coroutineInfoDataList.size) {
+                    val headOfCoroutineInfoNode1 =
+                        coroutineInfoDataList[0]
+                        addCoroutineInfoNode(graph, coroutineInfoDataList[i-1], 20.0 + (i-1) * 300.0, 20.0)
+                }
+            } finally {
+                model.endUpdate()
+            }
         }
 
-        buildCoroutineStacksToolWindowView(dispatchers, dispatcherToCoroutineStacksTree)
-    }
-
-    private fun buildCoroutineStacksToolWindowView(
-        dispatchers: MutableSet<String>,
-        dispatcherToCoroutineStacksTree: MutableMap<String, Tree<CoroutineStacksNode>>
-    ) {
-        val dispatcherLabel = JLabel(CoroutineStacksBundle.message("select.dispatcher"))
-
-        val coroutineStacksWindowHeader = Box.createHorizontalBox()
-
-        val dispatcherDropdownMenu = ComboBox(dispatchers.toTypedArray())
-        val comboBoxSize = Dimension(Constants.comboBoxHeight, Constants.comboBoxWidth)
-        dispatcherDropdownMenu.preferredSize = comboBoxSize
-        dispatcherDropdownMenu.maximumSize = comboBoxSize
-        dispatcherDropdownMenu.minimumSize = comboBoxSize
-
-        coroutineStacksWindowHeader.add(dispatcherLabel)
-        coroutineStacksWindowHeader.add(dispatcherDropdownMenu)
-
-        coroutineGraph?.add(coroutineStacksWindowHeader)
-
-        val coroutineStacksView = Box.createVerticalBox()
-        buildCoroutineStacksView(dispatcherToCoroutineStacksTree, coroutineStacksView, dispatchers)
-
-        coroutineGraph?.add(coroutineStacksView)
-
+        coroutineGraph = mxGraphComponent(graph)
         add(coroutineGraph)
     }
 
-    private fun buildCoroutineStacksView(
-        mapOfParallelStackTree: MutableMap<String, Tree<CoroutineStacksNode>>,
-        coroutineStacksView: Box,
-        dispatchers: MutableSet<String>
-    ) {
-        if (dispatchers.isEmpty()) {
-            return
+    private fun addCoroutineInfoNode(graph: mxGraph, coroutineInfoData: CoroutineInfoData, d: Double, d1: Double): Any {
+
+        val currentTheme = UIUtil.isUnderDarcula()
+        var backgroundColorForVertex = "#3c3f41"
+
+        if (currentTheme) {
+            backgroundColorForVertex = "#3c3f41"
         }
 
-        // code is incomplete, a coroutine stack view will show graphs for all possible dispatchers, but here
-        // the graph will be shown for only the first dispatcher in the list.
-        // Implement the functionality to build graph for all dispatchers. Fix this in next commit.
+        val coroutineInfoNode = graph.insertVertex(graph.defaultParent, null, "", d, d1, 200.0
+            , 20.0
+        )
 
-        val dispatchersList = dispatchers.toTypedArray()
-        val tree = mapOfParallelStackTree[dispatchersList[0]] ?: return
+        val vertices = mutableListOf<Any>()
+        val headers = mutableListOf<Any>()
 
-        val rows = mutableListOf<Box>()
-        for (i in 1..tree.getHeight()) {
-            rows.add(Box.createHorizontalBox())
-        }
+        var distanceFromLastVertex = 0.0
 
-        addCoroutineInfoToCoroutineStackWindow(tree.root, rows)
+        with(graph) {
+            val parent = graph.defaultParent
+            val coroutineInfoNodeHeader = coroutineInfoData.descriptor.name + coroutineInfoData.descriptor.id + " " + coroutineInfoData.descriptor.state
 
-        for (row in rows.reversed()) {
-            coroutineStacksView.add(row)
-            coroutineStacksView.add(Box.createVerticalStrut(Constants.boxVerticalStruct))
-        }
-    }
+            var v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding(coroutineInfoNodeHeader), 0.0, 0.0, 200.0
+                , 20.0
+            )
+            headers.add(v)
 
-    private fun addCoroutineInfoToCoroutineStackWindow(
-        rootNode: TreeNode<CoroutineStacksNode>,
-        rows: MutableList<Box>
-    ) {
-        val stack = Stack<Pair<TreeNode<CoroutineStacksNode>, Int>>()
-        stack.push(rootNode to 0)
+            v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding("Active Thread"), 0.0, 20.0
+                , 200.0
+                , 20.0
+            )
+            headers.add(v)
 
-        while (stack.isNotEmpty()) {
-            val (node, level) = stack.pop()
+            val activeThread = coroutineInfoData.activeThread.toString()
+            v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding(activeThread), 0.0, 60.0, 200.0
+                , 20.0
+            )
+            vertices.add(v)
 
-            if (node.value.stackTrace.isNotEmpty()) {
-                addCoroutineInfoBox(node.value, rows[level])
+            v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding("Creation Stack Trace"), 0.0, 90.0, 200.0
+                , 20.0
+            )
+            headers.add(v)
+
+            for (i in coroutineInfoData.creationStackTrace) {
+                distanceFromLastVertex += 20.0
+
+                v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding(i.toString()), 0.0, 90.0 + distanceFromLastVertex, 200.0
+                    , 20.0
+                )
+                vertices.add(v)
             }
 
-            for (child in node.children) {
-                stack.push(child to level + 1)
+            var stackTraceHeader = if (coroutineInfoData.stackTrace.isNotEmpty()) "Stack Trace" else "Stack Trace (Empty)"
+
+            v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding(stackTraceHeader), 0.0, 90.0 + distanceFromLastVertex, 200.0
+                , 20.0
+            )
+            headers.add(v)
+
+            for (i in coroutineInfoData.stackTrace) {
+                distanceFromLastVertex += 20.0
+
+                v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding(i.toString()), 0.0, 90.0 + distanceFromLastVertex, 200.0
+                    , 20.0
+                )
+                vertices.add(v)
             }
-        }
-    }
 
-    private fun addCoroutineInfoBox(node: CoroutineStacksNode, box: Box) {
-        val headerText = CoroutineStacksBundle.message("number.of.coroutines", node.additionalData.size)
-        val stackFrames = mutableListOf<String>()
-        stackFrames.add(headerText)
+            var topFrameHeader = if (coroutineInfoData.topFrameVariables.isNotEmpty()) "Top Frame" else "Top Frame (Empty)"
 
-        stackFrames.addAll(node.stackTrace)
+            v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding(topFrameHeader), 0.0, 90.0 + distanceFromLastVertex, 200.0
+                , 20.0
+            )
+            headers.add(v)
 
-        val coroutineListView = JBList<String>(stackFrames)
+            for (i in coroutineInfoData.topFrameVariables) {
+                distanceFromLastVertex += 20.0
 
-        coroutineListView.cellRenderer = cellRenderer
-
-        val scrollPane = JBScrollPane(coroutineListView)
-
-        val border = BorderFactory.createLineBorder(JBColor.BLACK, Constants.borderWidth)
-        scrollPane.border = border
-
-        box.add(scrollPane)
-        box.add(Box.createHorizontalStrut(Constants.boxHorizontalStruct))
-    }
-
-    private fun generateParallelStackTree(
-        tree: Tree<CoroutineStacksNode>,
-        rootValue: CoroutineStacksNode?,
-        positionOfStackFrame: Int
-    ) {
-        val dataToStackFrame = mutableMapOf<CoroutineInfoData, String>()
-        if (rootValue == null) {
-            return
-        }
-
-        for (data in rootValue.additionalData) {
-            if (data.stackTrace.size > positionOfStackFrame)
-                dataToStackFrame[data] = data.stackTrace[data.stackTrace.size -1 - positionOfStackFrame].toString()
-        }
-
-        val entries = dataToStackFrame.entries
-
-        val groupedByValue = entries.groupBy { it.value }
-
-        val groupedPositions = groupedByValue.map { (_, list) ->
-            list.map { it.key }
-        }
-
-        for (groupedPosition in groupedPositions) {
-            if (entries.size == 1 && rootValue.stackTrace.isNotEmpty()) {
-                rootValue.stackTrace.add(dataToStackFrame[groupedPosition[0]]!!)
-                generateParallelStackTree(tree, rootValue, positionOfStackFrame + 1)
-            } else if (entries.size > 1) {
-                val childValue = CoroutineStacksNode(stackTrace = mutableListOf(dataToStackFrame[groupedPosition[0]]!!), additionalData = groupedPosition)
-                println("childValue in recursion: $childValue")
-                println()
-                tree.insert(childValue, rootValue)
-                generateParallelStackTree(tree, childValue, positionOfStackFrame + 1)
+                v = insertVertex(coroutineInfoNode, null, createVertexLabelWithPadding(i.toString()), 0.0, 90.0 + distanceFromLastVertex, 200.0
+                    , 20.0
+                )
+                vertices.add(v)
             }
+
+            setCellStyle(createVertexStyle(backgroundColorForVertex, "white", "hidden", "left", "Arial", 10),
+                vertices.toTypedArray()
+            )
+            setCellStyle(createVertexStyle(backgroundColorForVertex, "white", "hidden", "center", "Arial", 12),
+                headers.toTypedArray()
+            )
+
+            setCellStyles(mxConstants.STYLE_STROKECOLOR, "#000000", arrayOf(coroutineInfoNode))
+            setCellStyles(mxConstants.STYLE_STROKEWIDTH, "1", arrayOf(coroutineInfoNode))
+            setCellStyles(mxConstants.STYLE_ROUNDED, "true", arrayOf(coroutineInfoNode))
+
         }
+
+        coroutineInfoNode
+
+        return coroutineInfoNode
     }
 
-    data class CoroutineStacksNode(
-        val stackTrace: MutableList<String>,
-        val additionalData: List<CoroutineInfoData>
-    )
-
-    class TreeNode<T>(val value: T) {
-        val children: MutableList<TreeNode<T>> = mutableListOf()
-
-        fun addChild(child: TreeNode<T>) {
-            children.add(child)
-        }
+    private fun createVertexStyle(
+        backgroundColor: String,
+        textColor: String,
+        overflow: String,
+        alignment: String,
+        fontFamily: String,
+        fontSize: Int
+    ): String {
+        return String.format(
+            "fillColor=%s;strokeColor=black;fontColor=%s;overflow=%s;align=%s;fontFamily=%s;fontSize=%d;",
+            backgroundColor,
+            textColor,
+            overflow,
+            alignment,
+            fontFamily,
+            fontSize
+        )
     }
 
-    class Tree<T>(val root: TreeNode<T>) {
+    private fun createVertexStyleWithGradient(
+        startColor: String,
+        endColor: String,
+        textColor: String,
+        overflow: String,
+        alignment: String,
+        fontFamily: String,
+        fontSize: Int
+    ): String {
+        val gradientColors = "west=$startColor;east=$endColor"
 
-        fun insert(value: T, parentValue: T) {
-            val newNode = TreeNode(value)
-            val parentNode = findNode(root, parentValue)
-            parentNode?.addChild(newNode)
-        }
-
-        private fun findNode(node: TreeNode<T>, value: T): TreeNode<T>? {
-            if (node.value == value) {
-                return node
-            }
-            for (child in node.children) {
-                val result = findNode(child, value)
-                if (result != null) {
-                    return result
-                }
-            }
-            return null
-        }
-
-        fun getHeight() : Int {
-            return root.getHeight()
-        }
+        return String.format(
+            "gradientColor=%s;strokeColor=black;fontColor=%s;overflow=%s;align=%s;fontFamily=%s;fontSize=%d;",
+            gradientColors,
+            textColor,
+            overflow,
+            alignment,
+            fontFamily,
+            fontSize
+        )
     }
 
-    private fun printTree(node: TreeNode<CoroutineStacksNode>?, level: Int) {
-        if (node == null) {
-            println("no children")
-            return
-        }
 
-        println("${"\t".repeat(level)}- Node: ${node.value}")
-        for (child in node.children) {
-            printTree(child, level + 1)
-        }
-    }
-}
-
-private fun <T> CoroutineStacksPanel.TreeNode<T>.getHeight(): Int {
-    if (children.isEmpty()) {
-        return 0
+    private fun getRoundedVertexStyle(): String {
+        return "${mxConstants.STYLE_SHAPE}=${mxConstants.SHAPE_RECTANGLE};${mxConstants.STYLE_ROUNDED}=1;"
     }
 
-    val stack = Stack<Pair<CoroutineStacksPanel.TreeNode<T>, Int>>()
-    stack.push(this to 1)
-    var maxHeight = 0
+    private fun createVertexLabelWithPadding(label: String): String
+        = "  $label"
 
-    while (stack.isNotEmpty()) {
-        val (node, height) = stack.pop()
 
-        if (height > maxHeight) {
-            maxHeight = height
-        }
-
-        for (child in node.children) {
-            stack.push(child to height + 1)
-        }
-    }
-
-    return maxHeight
 }
