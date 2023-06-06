@@ -147,9 +147,7 @@ internal fun Container.dfs(visitor: ComponentVisitor) {
         var i = currentIndex + 1
         while (i < componentCount) {
             if (getComponent(i) is Separator) {
-                if (currentIndex != -1) {
-                    leaveComponent()
-                }
+                leaveComponent()
                 i += 1
             } else {
                 stack.push(i)

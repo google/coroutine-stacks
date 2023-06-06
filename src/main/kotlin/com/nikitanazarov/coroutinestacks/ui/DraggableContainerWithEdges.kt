@@ -2,9 +2,7 @@ package com.nikitanazarov.coroutinestacks.ui
 
 import com.intellij.ui.JBColor
 import java.awt.*
-import java.awt.event.MouseEvent
-import java.awt.event.MouseListener
-import java.awt.event.MouseMotionListener
+import java.awt.event.*
 import java.awt.geom.Path2D
 import javax.swing.JViewport
 
