@@ -11,9 +11,9 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.ui.JBColor.GRAY
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.xdebugger.XDebuggerManager
-import com.nikitanazarov.coroutinestacks.CoroutineStackPanelData
 import com.nikitanazarov.coroutinestacks.CoroutineStacksBundle
 import com.nikitanazarov.coroutinestacks.Node
 import com.nikitanazarov.coroutinestacks.buildCoroutineStackForest
@@ -24,17 +24,16 @@ import org.jetbrains.kotlin.idea.debugger.coroutine.proxy.CoroutineDebugProbesPr
 import java.awt.Dimension
 import javax.swing.Box
 import javax.swing.BoxLayout
+import javax.swing.JButton
 import javax.swing.JLabel
-import javax.swing.JToggleButton
 
 class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
     companion object {
         val dispatcherSelectionMenuSize = Dimension(200, 25)
     }
-
     private val panelContent = Box.createVerticalBox()
     private val forest = Box.createVerticalBox()
-    private var dispatcherDropdownMenu : DispatcherDropdownMenu? = null
+    var areLibraryFramesAllowed: Boolean = true
 
     private val panelBuilderListener = object : DebugProcessListener {
         override fun paused(suspendContext: SuspendContext) {
@@ -48,6 +47,7 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
     }
 
     init {
+        areLibraryFramesAllowed = true
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         emptyText.text = CoroutineStacksBundle.message("no.java.debug.process.is.running")
         val currentSession = XDebuggerManager.getInstance(project).currentSession
@@ -77,6 +77,7 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
                 override fun sessionRemoved(session: DebuggerSession) {
                     emptyText.text = CoroutineStacksBundle.message("no.java.debug.process.is.running")
                     emptyText.component.isVisible = true
+                    removeAll()
                     panelContent.removeAll()
                 }
             })
@@ -105,10 +106,12 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
         }
 
 
-        dispatcherDropdownMenu = DispatcherDropdownMenu(suspendContextImpl, dispatcherToCoroutineDataList)
+        val dispatcherDropdownMenu = DispatcherDropdownMenu(suspendContextImpl, dispatcherToCoroutineDataList)
+
         val coroutineStacksPanelHeader = CoroutineStacksPanelHeader(
             suspendContextImpl,
-            dispatcherToCoroutineDataList
+            dispatcherToCoroutineDataList,
+            dispatcherDropdownMenu
         )
         val breakpointLocation = suspendContextImpl.location
 
@@ -116,12 +119,12 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
             coroutineDataList.forEach { data ->
                 val location = data.stackTrace.firstOrNull()?.location
                 if (data.descriptor.state == State.RUNNING && location == breakpointLocation) {
-                    dispatcherDropdownMenu?.selectedItem = dispatcher
+                    dispatcherDropdownMenu.selectedItem = dispatcher
                 }
             }
         }
 
-        val selectedDispatcher = dispatcherDropdownMenu?.selectedItem as? String
+        val selectedDispatcher = dispatcherDropdownMenu.selectedItem as? String
         val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
         if (!coroutineDataList.isNullOrEmpty()) {
             updateCoroutineStackForest(coroutineDataList, suspendContextImpl)
@@ -135,20 +138,31 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
         coroutineDataList: List<CoroutineInfoData>,
         suspendContextImpl: SuspendContextImpl
     ) {
+        runInEdt {
+            forest.addLabel(CoroutineStacksBundle.message("panel.updating"))
+            updateUI()
+        }
         suspendContextImpl.debugProcess.managerThread.invoke(object : DebuggerCommandImpl() {
             override fun action() {
                 val root = Node()
                 val coroutineStackForest = suspendContextImpl.buildCoroutineStackForest(
                     root,
-                    coroutineDataList
+                    coroutineDataList,
+                    areLibraryFramesAllowed
                 )
                 if (coroutineStackForest == null) {
-                    emptyText.text = CoroutineStacksBundle.message("nothing.to.show")
+                    runInEdt {
+                        forest.addLabel(CoroutineStacksBundle.message("nothing.to.show"))
+                        updateUI()
+                    }
                     return
                 }
 
                 runInEdt {
                     forest.removeAll()
+                    coroutineStackForest.verticalScrollBar.apply {
+                        value = maximum
+                    }
                     forest.add(coroutineStackForest)
                     updateUI()
                 }
@@ -158,21 +172,20 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
 
     inner class CoroutineStacksPanelHeader(
         suspendContextImpl: SuspendContextImpl,
-        dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>
+        dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>,
+        dispatcherDropdownMenu: DispatcherDropdownMenu
     ) : Box(BoxLayout.X_AXIS) {
         init {
-            val dispatcherLabel = JLabel(CoroutineStacksBundle.message("select.dispatcher"))
-            val libraryFrameToggle =
-                LibraryFrameToggle(
+            val libraryFrameToggle = LibraryFrameToggle(
                 suspendContextImpl,
-                dispatcherToCoroutineDataList
+                dispatcherToCoroutineDataList,
+                dispatcherDropdownMenu
             )
 
+            add(libraryFrameToggle)
             add(createHorizontalGlue())
-            add(dispatcherLabel)
             add(dispatcherDropdownMenu)
             add(createHorizontalGlue())
-            add(libraryFrameToggle)
         }
     }
 
@@ -188,7 +201,6 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
                     updateCoroutineStackForest(coroutineDataList, suspendContextImpl)
                 }
             }
-
             apply {
                 preferredSize = dispatcherSelectionMenuSize
                 maximumSize = dispatcherSelectionMenuSize
@@ -198,20 +210,37 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
     }
 
     inner class LibraryFrameToggle(
-        suspendContextImpl: SuspendContextImpl,
-        dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>
-    ) : JToggleButton(AllIcons.General.Filter) {
+        private val suspendContextImpl: SuspendContextImpl,
+        private val dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>,
+        private val dispatcherDropdownMenu: DispatcherDropdownMenu
+    ) : JButton(AllIcons.General.Filter) {
         init {
-            text = CoroutineStacksBundle.message("hide.library.frames")
+            setToolTip()
+            setProperties()
+            addActionListener()
+        }
+
+        private fun setToolTip() {
+            toolTipText = if (areLibraryFramesAllowed) {
+                CoroutineStacksBundle.message("hide.library.frames")
+            } else {
+                CoroutineStacksBundle.message("show.library.frames")
+            }
+        }
+
+        private fun setProperties() {
+            isOpaque = areLibraryFramesAllowed.not()
+            isContentAreaFilled = areLibraryFramesAllowed.not()
+            isBorderPainted = false
+        }
+
+        private fun addActionListener() {
             addActionListener {
-                CoroutineStackPanelData.apply {
-                    areLibraryFramesAllowed = areLibraryFramesAllowed.not()
-                    text = if (areLibraryFramesAllowed)
-                        CoroutineStacksBundle.message("hide.library.frames")
-                    else
-                        CoroutineStacksBundle.message("show.library.frames")
-                }
-                val selectedDispatcher = dispatcherDropdownMenu?.selectedItem as? String
+                areLibraryFramesAllowed = areLibraryFramesAllowed.not()
+                setToolTip()
+                setProperties()
+
+                val selectedDispatcher = dispatcherDropdownMenu.selectedItem as? String
                 val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
                 if (!coroutineDataList.isNullOrEmpty()) {
                     updateCoroutineStackForest(coroutineDataList, suspendContextImpl)
@@ -219,4 +248,18 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
             }
         }
     }
+
+}
+
+private fun Box.addLabel(content: String) {
+    val label = JLabel(content)
+    label.apply {
+        alignmentX = JBPanelWithEmptyText.CENTER_ALIGNMENT
+        alignmentY = JBPanelWithEmptyText.CENTER_ALIGNMENT
+        foreground = GRAY
+    }
+    removeAll()
+    add(Box.createVerticalGlue())
+    add(label)
+    add(Box.createVerticalGlue())
 }

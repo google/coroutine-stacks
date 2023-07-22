@@ -1,14 +1,12 @@
 package com.nikitanazarov.coroutinestacks
 
+import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.JVMStackFrameInfoProvider
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.util.preferredWidth
-import com.nikitanazarov.coroutinestacks.ui.CoroutineFramesList
-import com.nikitanazarov.coroutinestacks.ui.DraggableContainerWithEdges
-import com.nikitanazarov.coroutinestacks.ui.ForestLayout
-import com.nikitanazarov.coroutinestacks.ui.Separator
+import com.nikitanazarov.coroutinestacks.ui.*
 import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineStackFrameItem
@@ -31,9 +29,10 @@ data class CoroutineTrace(
 
 fun SuspendContextImpl.buildCoroutineStackForest(
     rootValue: Node,
-    coroutineDataList: List<CoroutineInfoData>
+    coroutineDataList: List<CoroutineInfoData>,
+    areLibraryFramesAllowed: Boolean
 ): JBScrollPane? {
-    buildStackFrameGraph(coroutineDataList, rootValue)
+    buildStackFrameGraph(coroutineDataList, rootValue, areLibraryFramesAllowed)
     val coroutineTraces = createCoroutineTraces(rootValue)
     return createCoroutineTraceForest(coroutineTraces)
 }
@@ -85,7 +84,10 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
     val forest = DraggableContainerWithEdges()
     componentData.forEach { forest.add(it) }
     forest.layout = ForestLayout()
-    return JBScrollPane(forest)
+
+    return JBScrollPane(forest).apply {
+        verticalScrollBar.value = verticalScrollBar.maximum
+    }
 }
 
 private fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
@@ -134,42 +136,37 @@ private fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
 
 private fun SuspendContextImpl.buildStackFrameGraph(
     coroutineDataList: List<CoroutineInfoData>,
-    rootValue: Node
+    rootValue: Node,
+    areLibraryFramesAllowed: Boolean
 ) {
     coroutineDataList.forEach { coroutineData ->
         var currentNode = rootValue
-
         val coroutineFrameItemLists: CoroutineFrameBuilder.Companion.CoroutineFrameItemLists
         try {
             coroutineFrameItemLists = CoroutineFrameBuilder.build(coroutineData, this) ?: return@forEach
         } catch (e : Exception) {
             return@forEach
         }
-        coroutineFrameItemLists.frames.reversed().forEach { stackFrame ->
-            val xStackFrame = stackFrame.createFrame(debugProcess)
-            val isLibraryFrame = (xStackFrame as JVMStackFrameInfoProvider).isInLibraryContent
-            if (isLibraryFrame.not() or CoroutineStackPanelData.areLibraryFramesAllowed) {
-                val location = stackFrame.location
-                val child = currentNode.children[location]
 
-                if (child != null) {
-                    child.num++
-                    child.coroutinesActive += coroutineData.render()
-                    currentNode = child
-                } else {
-                    val node = Node(
-                        stackFrame,
-                        1,
-                        mutableMapOf(),
-                        coroutineData.render()
-                    )
-                    currentNode.children[location] = node
-                    currentNode = node
+        coroutineFrameItemLists.frames.reversed().forEach { stackFrame ->
+            if (areLibraryFramesAllowed || !stackFrame.isLibraryFrame(debugProcess)) {
+                val location = stackFrame.location
+                val child = currentNode.children.getOrPut(location) {
+                    Node(stackFrame, 0, mutableMapOf(), "")
                 }
+
+                child.num++
+                child.coroutinesActive += with(coroutineData.descriptor) {
+                    "${name}${id} ${state}\n"
+                }
+                currentNode = child
             }
         }
     }
 }
 
-private fun CoroutineInfoData.render(): String =
-    "${descriptor.name}${descriptor.id} ${descriptor.state}\n"
+private fun CoroutineStackFrameItem.isLibraryFrame(debugProcess: DebugProcessImpl): Boolean {
+    val xStackFrame = createFrame(debugProcess)
+    val jvmStackFrameInfoProvider = (xStackFrame as? JVMStackFrameInfoProvider) ?: return false
+    return jvmStackFrameInfoProvider.isInLibraryContent
+}

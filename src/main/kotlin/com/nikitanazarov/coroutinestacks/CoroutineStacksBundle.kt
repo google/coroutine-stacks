@@ -13,7 +13,3 @@ object CoroutineStacksBundle : DynamicBundle(BUNDLE) {
     @JvmStatic
     fun message(@NonNls @PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String = getMessage(key, *params)
 }
-
-object CoroutineStackPanelData {
-    var areLibraryFramesAllowed: Boolean = true
-}
