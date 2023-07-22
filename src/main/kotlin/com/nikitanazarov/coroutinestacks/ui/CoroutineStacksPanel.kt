@@ -10,19 +10,24 @@ import com.intellij.debugger.impl.DebuggerManagerListener
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.impl.PrioritizedTask
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.JBColor.GRAY
 import com.intellij.ui.components.JBPanelWithEmptyText
+import com.intellij.ui.util.preferredWidth
 import com.intellij.xdebugger.XDebuggerManager
 import com.nikitanazarov.coroutinestacks.CoroutineStacksBundle
 import com.nikitanazarov.coroutinestacks.Node
 import com.nikitanazarov.coroutinestacks.buildCoroutineStackForest
 import com.sun.jdi.Location
+import org.jetbrains.kotlin.idea.debugger.coroutine.command.CoroutineDumpAction
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoCache
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.State
+import org.jetbrains.kotlin.idea.debugger.coroutine.data.toCompleteCoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.proxy.CoroutineDebugProbesProxy
 import java.awt.Dimension
 import javax.swing.Box
@@ -30,13 +35,18 @@ import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JLabel
 
-class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
+class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText() {
     companion object {
         val dispatcherSelectionMenuSize = Dimension(200, 25)
+        const val MAXIMUM_ZOOM_LEVEL = 1f
+        const val MINIMUM_ZOOM_LEVEL = -0.5
+        const val SCALE_FACTOR = 0.1f
     }
 
     private val panelContent = Box.createVerticalBox()
     private val forest = Box.createVerticalBox()
+    private var coroutineStackForest : ZoomableJBScrollPane? = null
+    private var zoomLevel = 0f
     var areLibraryFramesAllowed: Boolean = true
 
     private val panelBuilderListener = object : DebugProcessListener {
@@ -90,6 +100,7 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
 
                 override fun sessionRemoved(session: DebuggerSession) {
                     emptyText.text = CoroutineStacksBundle.message("no.java.debug.process.is.running")
+                    emptyText.component.isVisible = true
                     removeAll()
                     panelContent.removeAll()
                 }
@@ -118,7 +129,8 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
         val coroutineStacksPanelHeader = CoroutineStacksPanelHeader(
             suspendContextImpl,
             dispatcherToCoroutineDataList,
-            dispatcherDropdownMenu
+            dispatcherDropdownMenu,
+            coroutineInfoDataList
         )
         val breakpointLocation = suspendContextImpl.location
 
@@ -153,20 +165,21 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
         suspendContextImpl: SuspendContextImpl
     ) {
         runInEdt {
-            forest.addLabel(CoroutineStacksBundle.message("panel.updating"))
+            forest.replaceContentsWithLabel(CoroutineStacksBundle.message("panel.updating"))
             updateUI()
         }
         suspendContextImpl.debugProcess.managerThread.invoke(object : DebuggerCommandImpl() {
             override fun action() {
                 val root = Node()
-                val coroutineStackForest = suspendContextImpl.buildCoroutineStackForest(
+                coroutineStackForest = suspendContextImpl.buildCoroutineStackForest(
                     root,
                     coroutineDataList,
-                    areLibraryFramesAllowed
+                    areLibraryFramesAllowed,
+                    zoomLevel
                 )
                 if (coroutineStackForest == null) {
                     runInEdt {
-                        forest.addLabel(CoroutineStacksBundle.message("nothing.to.show"))
+                        forest.replaceContentsWithLabel(CoroutineStacksBundle.message("nothing.to.show"))
                         updateUI()
                     }
                     return
@@ -174,7 +187,7 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
 
                 runInEdt {
                     forest.removeAll()
-                    coroutineStackForest.verticalScrollBar.apply {
+                    coroutineStackForest?.verticalScrollBar?.apply {
                         value = maximum
                     }
                     forest.add(coroutineStackForest)
@@ -184,10 +197,37 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
         })
     }
 
+    inner class CaptureDumpButton(
+        private val suspendContextImpl: SuspendContextImpl,
+        private val coroutineInfoDataList: MutableList<CoroutineInfoData>
+    ) : JButton(AllIcons.Actions.Dump) {
+        init {
+            transparent = true
+            preferredWidth /= 2
+            toolTipText = CoroutineStacksBundle.message("get.coroutine.dump")
+            addActionListener {
+                // Copied from org.jetbrains.kotlin.idea.debugger.coroutine.command.CoroutineDumpAction#actionPerformed
+                val process = suspendContextImpl.debugProcess
+                val session = process.session
+                process.managerThread.schedule(object : SuspendContextCommandImpl(suspendContextImpl) {
+                    override fun contextAction(suspendContext: SuspendContextImpl) {
+                        val f = fun() {
+                            val ui = session.xDebugSession?.ui ?: return
+                            val coroutines = coroutineInfoDataList.map { it.toCompleteCoroutineInfoData() }
+                            CoroutineDumpAction().addCoroutineDump(project, coroutines, ui, session.searchScope)
+                        }
+                        ApplicationManager.getApplication().invokeLater(f, ModalityState.NON_MODAL)
+                    }
+                })
+            }
+        }
+    }
+
     inner class CoroutineStacksPanelHeader(
         suspendContextImpl: SuspendContextImpl,
         dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>,
-        dispatcherDropdownMenu: DispatcherDropdownMenu
+        dispatcherDropdownMenu: DispatcherDropdownMenu,
+        coroutineInfoDataList: MutableList<CoroutineInfoData>
     ) : Box(BoxLayout.X_AXIS) {
         init {
             val libraryFrameToggle = LibraryFrameToggle(
@@ -196,10 +236,63 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
                 dispatcherDropdownMenu
             )
 
+            val captureCoroutineDump = CaptureDumpButton(
+                suspendContextImpl,
+                coroutineInfoDataList
+            )
+
             add(libraryFrameToggle)
+            add(captureCoroutineDump)
             add(createHorizontalGlue())
             add(dispatcherDropdownMenu)
             add(createHorizontalGlue())
+            add(ZoomInButton())
+            add(ZoomOutButton())
+            add(ZoomToOriginalSizeButton())
+        }
+    }
+
+    inner class ZoomToOriginalSizeButton : JButton() {
+        init {
+            setupUI()
+            addActionListener {
+                coroutineStackForest?.scale(-zoomLevel)
+                zoomLevel = 0f
+            }
+        }
+
+        private fun setupUI() {
+            transparent = false
+            text = CoroutineStacksBundle.message("zoom.to.original.size.button.label")
+            toolTipText = CoroutineStacksBundle.message("zoom.to.original.size.button.hint")
+        }
+    }
+
+    inner class ZoomInButton : JButton(AllIcons.General.ZoomIn) {
+        init {
+            toolTipText = CoroutineStacksBundle.message("zoom.in.button.hint")
+            transparent = false
+            addActionListener {
+                if (zoomLevel > MAXIMUM_ZOOM_LEVEL) {
+                    return@addActionListener
+                }
+                zoomLevel += SCALE_FACTOR
+                coroutineStackForest?.scale(SCALE_FACTOR)
+            }
+        }
+    }
+
+    inner class ZoomOutButton : JButton(AllIcons.General.ZoomOut) {
+        init {
+            toolTipText = CoroutineStacksBundle.message("zoom.out.button.hint")
+            transparent = false
+            addActionListener {
+                if (zoomLevel < MINIMUM_ZOOM_LEVEL) {
+                    return@addActionListener
+                }
+                zoomLevel -= SCALE_FACTOR
+                coroutineStackForest?.scale(-SCALE_FACTOR)
+            }
         }
     }
 
@@ -229,8 +322,9 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
         private val dispatcherDropdownMenu: DispatcherDropdownMenu
     ) : JButton(AllIcons.General.Filter) {
         init {
+            transparent = true
+            preferredWidth /= 2
             setToolTip()
-            setProperties()
             addActionListener()
         }
 
@@ -242,17 +336,11 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
             }
         }
 
-        private fun setProperties() {
-            isOpaque = areLibraryFramesAllowed.not()
-            isContentAreaFilled = areLibraryFramesAllowed.not()
-            isBorderPainted = false
-        }
-
         private fun addActionListener() {
             addActionListener {
-                areLibraryFramesAllowed = areLibraryFramesAllowed.not()
+                areLibraryFramesAllowed = !areLibraryFramesAllowed
+                transparent = areLibraryFramesAllowed
                 setToolTip()
-                setProperties()
 
                 val selectedDispatcher = dispatcherDropdownMenu.selectedItem as? String
                 val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
@@ -262,10 +350,9 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
             }
         }
     }
-
 }
 
-private fun Box.addLabel(content: String) {
+private fun Box.replaceContentsWithLabel(content: String) {
     val label = JLabel(content)
     label.apply {
         alignmentX = JBPanelWithEmptyText.CENTER_ALIGNMENT
@@ -277,3 +364,11 @@ private fun Box.addLabel(content: String) {
     add(label)
     add(Box.createVerticalGlue())
 }
+
+private var JButton.transparent: Boolean
+    get() = !isOpaque
+    set(state) {
+        isOpaque = !state
+        isContentAreaFilled = !state
+        isBorderPainted = false
+    }

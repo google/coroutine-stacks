@@ -1,10 +1,9 @@
 package com.nikitanazarov.coroutinestacks
 
-import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.JVMStackFrameInfoProvider
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.ui.components.JBList
-import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.util.preferredHeight
 import com.intellij.ui.util.preferredWidth
 import com.nikitanazarov.coroutinestacks.ui.*
 import com.sun.jdi.Location
@@ -30,16 +29,18 @@ data class CoroutineTrace(
 fun SuspendContextImpl.buildCoroutineStackForest(
     rootValue: Node,
     coroutineDataList: List<CoroutineInfoData>,
-    areLibraryFramesAllowed: Boolean
-): JBScrollPane? {
+    areLibraryFramesAllowed: Boolean,
+    zoomLevel: Float
+): ZoomableJBScrollPane? {
     buildStackFrameGraph(rootValue, coroutineDataList, areLibraryFramesAllowed)
     val coroutineTraces = createCoroutineTraces(rootValue)
-    return createCoroutineTraceForest(coroutineTraces)
+    return createCoroutineTraceForest(coroutineTraces, zoomLevel)
 }
 
 private fun SuspendContextImpl.createCoroutineTraceForest(
-    traces: List<CoroutineTrace?>
-): JBScrollPane? {
+    traces: List<CoroutineTrace?>,
+    zoomLevel: Float
+): ZoomableJBScrollPane? {
     if (traces.isEmpty()) {
         return null
     }
@@ -72,9 +73,15 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
         return null
     }
     val averagePreferredWidth = maxWidth / traceNotNullCount
+
+    val firstVertex = vertexData.firstOrNull() ?: return null
+    val averagePreferredCellHeight = firstVertex.preferredHeight / firstVertex.model.size
+    val fontSize = firstVertex.font.size2D
+
     vertexData.forEach { vertex ->
         if (vertex != null) {
             vertex.preferredWidth = averagePreferredWidth
+            vertex.fixedCellHeight = averagePreferredCellHeight
             componentData.add(vertex)
             return@forEach
         }
@@ -85,9 +92,13 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
     componentData.forEach { forest.add(it) }
     forest.layout = ForestLayout()
 
-    return JBScrollPane(forest).apply {
-        verticalScrollBar.value = verticalScrollBar.maximum
-    }
+    return ZoomableJBScrollPane(
+        forest,
+        averagePreferredWidth,
+        averagePreferredCellHeight,
+        fontSize,
+        zoomLevel
+    )
 }
 
 fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
