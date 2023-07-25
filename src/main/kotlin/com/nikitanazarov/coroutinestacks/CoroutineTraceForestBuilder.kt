@@ -32,7 +32,7 @@ fun SuspendContextImpl.buildCoroutineStackForest(
     coroutineDataList: List<CoroutineInfoData>,
     areLibraryFramesAllowed: Boolean
 ): JBScrollPane? {
-    buildStackFrameGraph(coroutineDataList, rootValue, areLibraryFramesAllowed)
+    buildStackFrameGraph(rootValue, coroutineDataList, areLibraryFramesAllowed)
     val coroutineTraces = createCoroutineTraces(rootValue)
     return createCoroutineTraceForest(coroutineTraces)
 }
@@ -90,7 +90,7 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
     }
 }
 
-private fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
+fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
     val stack = Stack<Pair<Node, Int>>().apply { push(rootValue to 0) }
     val parentStack = Stack<Node>()
     var previousLevel: Int? = null
@@ -134,22 +134,34 @@ private fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
     return coroutineTraces
 }
 
-private fun SuspendContextImpl.buildStackFrameGraph(
-    coroutineDataList: List<CoroutineInfoData>,
+private fun SuspendContextImpl.buildStackFrameGraph(rootValue: Node, coroutineDataList: List<CoroutineInfoData>, areLibraryFramesAllowed: Boolean) {
+    val isFrameAllowed = { frame: CoroutineStackFrameItem ->
+        areLibraryFramesAllowed || !frame.isLibraryFrame(this)
+    }
+
+    val buildCoroutineFrames = { data: CoroutineInfoData ->
+        try {
+            CoroutineFrameBuilder.build(data, this)?.frames ?: emptyList()
+        } catch (e : Exception) {
+            emptyList()
+        }
+    }
+
+    buildStackFrameGraph(rootValue, coroutineDataList, isFrameAllowed, buildCoroutineFrames)
+}
+
+fun buildStackFrameGraph(
     rootValue: Node,
-    areLibraryFramesAllowed: Boolean
+    coroutineDataList: List<CoroutineInfoData>,
+    isFrameAllowed: (CoroutineStackFrameItem) -> Boolean,
+    buildCoroutineFrames: (CoroutineInfoData) -> List<CoroutineStackFrameItem>
 ) {
     coroutineDataList.forEach { coroutineData ->
         var currentNode = rootValue
-        val coroutineFrameItemLists: CoroutineFrameBuilder.Companion.CoroutineFrameItemLists
-        try {
-            coroutineFrameItemLists = CoroutineFrameBuilder.build(coroutineData, this) ?: return@forEach
-        } catch (e : Exception) {
-            return@forEach
-        }
+        val frames = buildCoroutineFrames(coroutineData)
 
-        coroutineFrameItemLists.frames.reversed().forEach { stackFrame ->
-            if (areLibraryFramesAllowed || !stackFrame.isLibraryFrame(debugProcess)) {
+        frames.reversed().forEach { stackFrame ->
+            if (isFrameAllowed(stackFrame)) {
                 val location = stackFrame.location
                 val child = currentNode.children.getOrPut(location) {
                     Node(stackFrame, 0, mutableMapOf(), "")
@@ -165,8 +177,8 @@ private fun SuspendContextImpl.buildStackFrameGraph(
     }
 }
 
-private fun CoroutineStackFrameItem.isLibraryFrame(debugProcess: DebugProcessImpl): Boolean {
-    val xStackFrame = createFrame(debugProcess)
+private fun CoroutineStackFrameItem.isLibraryFrame(suspendContext: SuspendContextImpl): Boolean {
+    val xStackFrame = createFrame(suspendContext.debugProcess)
     val jvmStackFrameInfoProvider = (xStackFrame as? JVMStackFrameInfoProvider) ?: return false
     return jvmStackFrameInfoProvider.isInLibraryContent
 }

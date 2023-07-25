@@ -1,0 +1,27 @@
+"coroutine", state: SUSPENDED
+	at MainKt$main$1.invokeSuspend(Main.kt:9)
+
+
+"coroutine", state: SUSPENDED
+	at MainKt$thread1$2.invokeSuspend(Main.kt:23)
+	at MainKt$main$1$job1$1.invokeSuspend(Main.kt:7)
+
+
+"coroutine", state: SUSPENDED
+	at MainKt$childThread$2.invokeSuspend(Main.kt:33)
+	at MainKt$thread1$2$childJob$1.invokeSuspend(Main.kt:19)
+
+
+"coroutine", state: SUSPENDED
+	at MainKt$childThread$2.invokeSuspend(Main.kt:31)
+	at MainKt$thread1$2$childJob$1.invokeSuspend(Main.kt:19)
+
+
+"coroutine", state: SUSPENDED
+	at MainKt$childThread$2.invokeSuspend(Main.kt:33)
+	at MainKt$thread1$2$childJob$1.invokeSuspend(Main.kt:19)
+
+
+"coroutine", state: RUNNING
+	at MainKt.grandchildThread(Main.kt:39)
+	at MainKt$childThread$2$grandchildJob$1.invokeSuspend(Main.kt:30)

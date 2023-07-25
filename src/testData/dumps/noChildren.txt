@@ -1,0 +1,106 @@
+"coroutine", state: RUNNING
+	at io.ktor.samples.chat.backend.ChatApplicationTest$testDualConversation$1$1.invokeSuspend(ChatApplicationTest.kt:75)
+	at io.ktor.samples.chat.backend.ChatApplicationTest$testDualConversation$1$1.invoke(ChatApplicationTest.kt:-1)
+	at io.ktor.samples.chat.backend.ChatApplicationTest$testDualConversation$1$1.invoke(ChatApplicationTest.kt:-1)
+	at io.ktor.client.plugins.websocket.BuildersKt.webSocket(builders.kt:101)
+	at io.ktor.samples.chat.backend.ChatApplicationTest$testDualConversation$1.invokeSuspend(ChatApplicationTest.kt:72)
+	at io.ktor.server.testing.TestApplicationKt$testApplication$builder$1$1.invokeSuspend(TestApplication.kt:335)
+
+
+"nonce-generator", state: SUSPENDED
+	at io.ktor.util.NonceKt$nonceGeneratorJob$1.invokeSuspend(Nonce.kt:76)
+
+
+"coroutine", state: SUSPENDED
+	at io.ktor.server.engine.BaseApplicationEngine$3.invokeSuspend(BaseApplicationEngine.kt:75)
+
+
+"coroutine", state: SUSPENDED
+	at io.ktor.server.engine.EngineContextCancellationHelperKt$launchOnCancellation$1.invokeSuspend(EngineContextCancellationHelper.kt:37)
+
+
+"coroutine", state: SUSPENDED
+
+
+"coroutine", state: SUSPENDED
+	at io.ktor.utils.io.ByteBufferChannel.readSuspendImpl(ByteBufferChannel.kt:2230)
+	at io.ktor.utils.io.ByteBufferChannel.copyDirect$ktor_io(ByteBufferChannel.kt:1265)
+	at io.ktor.utils.io.ByteReadChannelKt.copyAndClose(ByteReadChannel.kt:255)
+	at io.ktor.server.testing.TestApplicationResponse$responseChannel$job$1.invokeSuspend(TestApplicationResponse.kt:87)
+	at io.ktor.utils.io.CoroutinesKt$launchChannel$job$1.invokeSuspend(Coroutines.kt:134)
+
+
+"ws-writer", state: SUSPENDED
+	at io.ktor.websocket.WebSocketWriter.writeLoop(WebSocketWriter.kt:46)
+	at io.ktor.websocket.WebSocketWriter$writeLoopJob$1.invokeSuspend(WebSocketWriter.kt:40)
+
+
+"ws-reader", state: SUSPENDED
+	at io.ktor.utils.io.ByteBufferChannel.readSuspendImpl(ByteBufferChannel.kt:2230)
+	at io.ktor.utils.io.ByteBufferChannel.readAvailableSuspend(ByteBufferChannel.kt:731)
+	at io.ktor.websocket.WebSocketReader.readLoop(WebSocketReader.kt:68)
+	at io.ktor.websocket.WebSocketReader$readerJob$1.invokeSuspend(WebSocketReader.kt:40)
+
+
+"raw-ws", state: SUSPENDED
+	at io.ktor.websocket.RawWebSocketJvm$1.invokeSuspend(RawWebSocketJvm.kt:67)
+
+
+"raw-ws-handler", state: SUSPENDED
+	at io.ktor.samples.chat.backend.ChatApplication$main$4$1.invokeSuspend(ChatApplication.kt:185)
+	at io.ktor.server.websocket.RoutingKt.handleServerSession(Routing.kt:253)
+	at io.ktor.server.websocket.RoutingKt.proceedWebSocket(Routing.kt:238)
+	at io.ktor.server.websocket.RoutingKt$webSocket$2.invokeSuspend(Routing.kt:202)
+	at io.ktor.server.websocket.RoutingKt$webSocketRaw$2$1$1$1$1.invokeSuspend(Routing.kt:106)
+	at io.ktor.server.websocket.WebSocketUpgrade$upgrade$2.invokeSuspend(WebSocketUpgrade.kt:98)
+
+
+"ws-writer", state: SUSPENDED
+	at io.ktor.websocket.WebSocketWriter.writeLoop(WebSocketWriter.kt:46)
+	at io.ktor.websocket.WebSocketWriter$writeLoopJob$1.invokeSuspend(WebSocketWriter.kt:40)
+
+
+"ws-reader", state: SUSPENDED
+	at io.ktor.utils.io.ByteBufferChannel.readSuspendImpl(ByteBufferChannel.kt:2230)
+	at io.ktor.utils.io.ByteBufferChannel.readAvailableSuspend(ByteBufferChannel.kt:731)
+	at io.ktor.websocket.WebSocketReader.readLoop(WebSocketReader.kt:68)
+	at io.ktor.websocket.WebSocketReader$readerJob$1.invokeSuspend(WebSocketReader.kt:40)
+
+
+"coroutine", state: SUSPENDED
+	at io.ktor.server.testing.client.TestHttpClientEngineBridge$runWebSocketRequest$call$2.invokeSuspend(TestHttpClientEngineBridgeJvm.kt:40)
+	at io.ktor.server.testing.TestApplicationEngineJvmKt$handleWebSocketConversationNonBlocking$5$1.invokeSuspend(TestApplicationEngineJvm.kt:88)
+
+
+"ws-pinger", state: SUSPENDED
+	at io.ktor.websocket.PingPongKt$pinger$1$1.invokeSuspend(PingPong.kt:66)
+	at kotlinx.coroutines.TimeoutKt.withTimeoutOrNull(Timeout.kt:100)
+	at io.ktor.websocket.PingPongKt$pinger$1.invokeSuspend(PingPong.kt:64)
+
+
+"ws-ponger", state: SUSPENDED
+	at io.ktor.websocket.PingPongKt$ponger$1.invokeSuspend(PingPong.kt:119)
+
+
+"ws-incoming-processor", state: SUSPENDED
+	at io.ktor.websocket.DefaultWebSocketSessionImpl$runIncomingProcessor$1.invokeSuspend(DefaultWebSocketSession.kt:345)
+
+
+"ws-outgoing-processor", state: SUSPENDED
+	at io.ktor.websocket.DefaultWebSocketSessionImpl.outgoingProcessorLoop(DefaultWebSocketSession.kt:245)
+	at io.ktor.websocket.DefaultWebSocketSessionImpl$runOutgoingProcessor$1.invokeSuspend(DefaultWebSocketSession.kt:229)
+
+
+"ws-ponger", state: SUSPENDED
+	at io.ktor.websocket.PingPongKt$ponger$1.invokeSuspend(PingPong.kt:119)
+
+
+"ws-incoming-processor", state: SUSPENDED
+	at io.ktor.websocket.DefaultWebSocketSessionImpl$runIncomingProcessor$1.invokeSuspend(DefaultWebSocketSession.kt:345)
+
+
+"ws-outgoing-processor", state: SUSPENDED
+	at io.ktor.websocket.DefaultWebSocketSessionImpl.outgoingProcessorLoop(DefaultWebSocketSession.kt:245)
+	at io.ktor.websocket.DefaultWebSocketSessionImpl$runOutgoingProcessor$1.invokeSuspend(DefaultWebSocketSession.kt:229)
+
+
