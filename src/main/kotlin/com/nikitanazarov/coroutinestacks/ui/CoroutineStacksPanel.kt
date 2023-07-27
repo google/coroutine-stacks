@@ -5,8 +5,10 @@ import com.intellij.debugger.engine.JavaDebugProcess
 import com.intellij.debugger.engine.SuspendContext
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
+import com.intellij.debugger.engine.events.SuspendContextCommandImpl
 import com.intellij.debugger.impl.DebuggerManagerListener
 import com.intellij.debugger.impl.DebuggerSession
+import com.intellij.debugger.impl.PrioritizedTask
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.project.Project
@@ -37,13 +39,26 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
 
     private val panelBuilderListener = object : DebugProcessListener {
         override fun paused(suspendContext: SuspendContext) {
-            emptyText.component.isVisible = false
-            buildCoroutineGraph(suspendContext)
+            val suspendContextImpl = suspendContext as? SuspendContextImpl ?: run {
+                emptyText.text = CoroutineStacksBundle.message("coroutine.stacks.could.not.be.built")
+                return
+            }
+            suspendContextImpl.debugProcess.managerThread.schedule(BuildCoroutineGraphCommand(suspendContextImpl))
         }
 
         override fun resumed(suspendContext: SuspendContext?) {
             panelContent.removeAll()
         }
+    }
+
+    inner class BuildCoroutineGraphCommand(suspendContext: SuspendContextImpl) : SuspendContextCommandImpl(suspendContext) {
+        override fun contextAction(suspendContext: SuspendContextImpl) {
+            emptyText.component.isVisible = false
+            buildCoroutineGraph(suspendContext)
+        }
+
+        override fun getPriority() =
+            PrioritizedTask.Priority.LOW
     }
 
     init {
@@ -54,14 +69,11 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
         if (currentSession != null) {
             val javaDebugProcess = currentSession.debugProcess as? JavaDebugProcess
             val currentProcess = javaDebugProcess?.debuggerSession?.process
-            currentProcess?.managerThread?.invoke(object : DebuggerCommandImpl() {
-                override fun action() {
-                    emptyText.component.isVisible = false
-                    buildCoroutineGraph(currentProcess.suspendManager.pausedContext)
-                }
-            })
-
-            currentProcess?.addDebugProcessListener(panelBuilderListener)
+            if (currentProcess != null) {
+                val suspendContext = currentProcess.suspendManager.pausedContext
+                currentProcess.managerThread.schedule(BuildCoroutineGraphCommand(suspendContext))
+                currentProcess.addDebugProcessListener(panelBuilderListener)
+            }
         }
 
         project.messageBus.connect()
