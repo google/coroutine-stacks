@@ -19,6 +19,7 @@ import com.intellij.xdebugger.XDebuggerManager
 import com.nikitanazarov.coroutinestacks.CoroutineStacksBundle
 import com.nikitanazarov.coroutinestacks.Node
 import com.nikitanazarov.coroutinestacks.buildCoroutineStackForest
+import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoCache
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.State
@@ -33,6 +34,7 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
     companion object {
         val dispatcherSelectionMenuSize = Dimension(200, 25)
     }
+
     private val panelContent = Box.createVerticalBox()
     private val forest = Box.createVerticalBox()
     var areLibraryFramesAllowed: Boolean = true
@@ -88,23 +90,17 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
 
                 override fun sessionRemoved(session: DebuggerSession) {
                     emptyText.text = CoroutineStacksBundle.message("no.java.debug.process.is.running")
-                    emptyText.component.isVisible = true
                     removeAll()
                     panelContent.removeAll()
                 }
             })
     }
 
-    fun buildCoroutineGraph(suspendContext: SuspendContext) {
-        val suspendContextImpl = suspendContext as? SuspendContextImpl ?: run {
-            emptyText.text = CoroutineStacksBundle.message("coroutine.stacks.could.not.be.built")
-            return
-        }
-
+    private fun buildCoroutineGraph(suspendContextImpl: SuspendContextImpl) {
         val coroutineInfoCache: CoroutineInfoCache
         try {
             coroutineInfoCache = CoroutineDebugProbesProxy(suspendContextImpl).dumpCoroutines()
-        } catch (e: Exception) {
+        } catch(e: Exception) {
             emptyText.text = CoroutineStacksBundle.message("nothing.to.show")
             return
         }
@@ -117,7 +113,6 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
             }
         }
 
-
         val dispatcherDropdownMenu = DispatcherDropdownMenu(suspendContextImpl, dispatcherToCoroutineDataList)
 
         val coroutineStacksPanelHeader = CoroutineStacksPanelHeader(
@@ -129,7 +124,14 @@ class CoroutineStacksPanel(project: Project) : JBPanelWithEmptyText() {
 
         dispatcherToCoroutineDataList.forEach { (dispatcher, coroutineDataList) ->
             coroutineDataList.forEach { data ->
-                val location = data.stackTrace.firstOrNull()?.location
+                val location: Location?
+                try {
+                    location = data.stackTrace.firstOrNull()?.location
+                } catch(e: Exception) {
+                    emptyText.text = CoroutineStacksBundle.message("nothing.to.show")
+                    return
+                }
+
                 if (data.descriptor.state == State.RUNNING && location == breakpointLocation) {
                     dispatcherDropdownMenu.selectedItem = dispatcher
                 }
