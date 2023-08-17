@@ -46,9 +46,10 @@ fun SuspendContextImpl.buildCoroutineStackForest(
     rootValue: Node,
     coroutineDataList: List<CoroutineInfoData>,
     areLibraryFramesAllowed: Boolean,
+    addCreationFrames: Boolean,
     zoomLevel: Float
 ): ZoomableJBScrollPane? {
-    buildStackFrameGraph(rootValue, coroutineDataList, areLibraryFramesAllowed)
+    buildStackFrameGraph(rootValue, coroutineDataList, areLibraryFramesAllowed, addCreationFrames)
     val coroutineTraces = createCoroutineTraces(rootValue)
     return createCoroutineTraceForest(coroutineTraces, zoomLevel)
 }
@@ -161,14 +162,26 @@ fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
     return coroutineTraces
 }
 
-private fun SuspendContextImpl.buildStackFrameGraph(rootValue: Node, coroutineDataList: List<CoroutineInfoData>, areLibraryFramesAllowed: Boolean) {
+private fun SuspendContextImpl.buildStackFrameGraph(
+    rootValue: Node,
+    coroutineDataList: List<CoroutineInfoData>,
+    areLibraryFramesAllowed: Boolean,
+    addCreationFrames: Boolean
+) {
     val isFrameAllowed = { frame: CoroutineStackFrameItem ->
         areLibraryFramesAllowed || !frame.isLibraryFrame(this)
     }
 
     val buildCoroutineFrames = { data: CoroutineInfoData ->
         try {
-            CoroutineFrameBuilder.build(data, this)?.frames ?: emptyList()
+            val frameList = CoroutineFrameBuilder.build(data, this)
+            if (frameList == null) {
+                emptyList()
+            } else if (addCreationFrames) {
+                frameList.frames + frameList.creationFrames
+            } else {
+                frameList.frames
+            }
         } catch (e : Exception) {
             emptyList()
         }

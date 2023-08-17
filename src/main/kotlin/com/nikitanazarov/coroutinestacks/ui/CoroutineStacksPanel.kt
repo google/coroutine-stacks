@@ -44,10 +44,7 @@ import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.toCompleteCoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.proxy.CoroutineDebugProbesProxy
 import java.awt.Dimension
-import javax.swing.Box
-import javax.swing.BoxLayout
-import javax.swing.JButton
-import javax.swing.JLabel
+import javax.swing.*
 
 class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText() {
     companion object {
@@ -61,7 +58,8 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     private val forest = Box.createVerticalBox()
     private var coroutineStackForest : ZoomableJBScrollPane? = null
     private var zoomLevel = 0f
-    var areLibraryFramesAllowed: Boolean = true
+    private var areLibraryFramesAllowed: Boolean = true
+    private var addCreationFrames: Boolean = false
 
     private val panelBuilderListener = object : DebugProcessListener {
         override fun paused(suspendContext: SuspendContext) {
@@ -85,6 +83,19 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
 
         override fun getPriority() =
             PrioritizedTask.Priority.LOW
+    }
+
+    inner class GraphBuildingContext(
+        val suspendContext: SuspendContextImpl,
+        val dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>,
+        var selectedDispatcher: String?
+    ) {
+        fun rebuildGraph() {
+            val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
+            if (!coroutineDataList.isNullOrEmpty()) {
+                updateCoroutineStackForest(coroutineDataList, suspendContext)
+            }
+        }
     }
 
     init {
@@ -130,30 +141,24 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
             return
         }
 
-        val coroutineInfoDataList = coroutineInfoCache.cache
         val dispatcherToCoroutineDataList = mutableMapOf<String, MutableList<CoroutineInfoData>>()
-        for (data in coroutineInfoDataList) {
+        for (data in coroutineInfoCache.cache) {
             data.descriptor.dispatcher?.let {
                 dispatcherToCoroutineDataList.getOrPut(it) { mutableListOf() }.add(data)
             }
         }
 
-        val dispatcherDropdownMenu = DispatcherDropdownMenu(suspendContextImpl, dispatcherToCoroutineDataList)
-
-        val coroutineStacksPanelHeader = CoroutineStacksPanelHeader(
+        val firstDispatcher = dispatcherToCoroutineDataList.keys.firstOrNull()
+        val context = GraphBuildingContext(
             suspendContextImpl,
             dispatcherToCoroutineDataList,
-            dispatcherDropdownMenu,
-            coroutineInfoDataList
+            firstDispatcher
         )
-        val selectedDispatcher = dispatcherDropdownMenu.selectedItem as? String
-        val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
-        if (!coroutineDataList.isNullOrEmpty()) {
-            updateCoroutineStackForest(coroutineDataList, suspendContextImpl)
-        }
-        panelContent.add(coroutineStacksPanelHeader)
+        panelContent.add(CoroutineStacksPanelHeader(context))
         panelContent.add(forest)
         add(panelContent)
+
+        context.rebuildGraph()
     }
 
     fun updateCoroutineStackForest(
@@ -164,6 +169,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
             forest.replaceContentsWithLabel(CoroutineStacksBundle.message("panel.updating"))
             updateUI()
         }
+
         suspendContextImpl.debugProcess.managerThread.invoke(object : DebuggerCommandImpl() {
             override fun action() {
                 val root = Node()
@@ -171,7 +177,8 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
                     root,
                     coroutineDataList,
                     areLibraryFramesAllowed,
-                    zoomLevel
+                    addCreationFrames,
+                    zoomLevel,
                 )
                 if (coroutineStackForest == null) {
                     runInEdt {
@@ -193,58 +200,42 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         })
     }
 
-    inner class CaptureDumpButton(
-        private val suspendContextImpl: SuspendContextImpl,
-        private val coroutineInfoDataList: MutableList<CoroutineInfoData>
-    ) : JButton(AllIcons.Actions.Dump) {
+    inner class CoroutineStacksPanelHeader(context: GraphBuildingContext) : Box(BoxLayout.X_AXIS) {
+        init {
+            add(LibraryFrameToggle(context))
+            add(CaptureDumpButton(context))
+            add(CreationFramesToggle(context))
+            add(createHorizontalGlue())
+            add(DispatcherDropdownMenu(context))
+            add(createHorizontalGlue())
+            add(ZoomInButton())
+            add(ZoomOutButton())
+            add(ZoomToOriginalSizeButton())
+        }
+    }
+
+    inner class CaptureDumpButton(context: GraphBuildingContext) : JButton(AllIcons.Actions.Dump) {
         init {
             transparent = true
             preferredWidth /= 2
             toolTipText = CoroutineStacksBundle.message("get.coroutine.dump")
             addActionListener {
-                // Copied from org.jetbrains.kotlin.idea.debugger.coroutine.command.CoroutineDumpAction#actionPerformed
-                val process = suspendContextImpl.debugProcess
+                val suspendContext = context.suspendContext
+                val process = suspendContext.debugProcess
                 val session = process.session
-                process.managerThread.schedule(object : SuspendContextCommandImpl(suspendContextImpl) {
+                process.managerThread.schedule(object : SuspendContextCommandImpl(suspendContext) {
                     override fun contextAction(suspendContext: SuspendContextImpl) {
-                        val f = fun() {
-                            val ui = session.xDebugSession?.ui ?: return
-                            val coroutines = coroutineInfoDataList.map { it.toCompleteCoroutineInfoData() }
+                        ApplicationManager.getApplication().invokeLater({
+                            val ui = session.xDebugSession?.ui ?: return@invokeLater
+                            val coroutines = context.dispatcherToCoroutineDataList
+                                .values
+                                .flatten()
+                                .map { it.toCompleteCoroutineInfoData() }
                             CoroutineDumpAction().addCoroutineDump(project, coroutines, ui, session.searchScope)
-                        }
-                        ApplicationManager.getApplication().invokeLater(f, ModalityState.NON_MODAL)
+                        }, ModalityState.NON_MODAL)
                     }
                 })
             }
-        }
-    }
-
-    inner class CoroutineStacksPanelHeader(
-        suspendContextImpl: SuspendContextImpl,
-        dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>,
-        dispatcherDropdownMenu: DispatcherDropdownMenu,
-        coroutineInfoDataList: MutableList<CoroutineInfoData>
-    ) : Box(BoxLayout.X_AXIS) {
-        init {
-            val libraryFrameToggle = LibraryFrameToggle(
-                suspendContextImpl,
-                dispatcherToCoroutineDataList,
-                dispatcherDropdownMenu
-            )
-
-            val captureCoroutineDump = CaptureDumpButton(
-                suspendContextImpl,
-                coroutineInfoDataList
-            )
-
-            add(libraryFrameToggle)
-            add(captureCoroutineDump)
-            add(createHorizontalGlue())
-            add(dispatcherDropdownMenu)
-            add(createHorizontalGlue())
-            add(ZoomInButton())
-            add(ZoomOutButton())
-            add(ZoomToOriginalSizeButton())
         }
     }
 
@@ -293,16 +284,12 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     }
 
     inner class DispatcherDropdownMenu(
-        suspendContextImpl: SuspendContextImpl,
-        dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>
-    ) : ComboBox<String>(dispatcherToCoroutineDataList.keys.toTypedArray()) {
+        context: GraphBuildingContext
+    ) : ComboBox<String>(context.dispatcherToCoroutineDataList.keys.toTypedArray()) {
         init {
             addActionListener {
-                val selectedDispatcher = selectedItem as? String
-                val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
-                if (!coroutineDataList.isNullOrEmpty()) {
-                    updateCoroutineStackForest(coroutineDataList, suspendContextImpl)
-                }
+                context.selectedDispatcher = selectedItem as? String
+                context.rebuildGraph()
             }
             apply {
                 preferredSize = dispatcherSelectionMenuSize
@@ -312,39 +299,27 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         }
     }
 
-    inner class LibraryFrameToggle(
-        private val suspendContextImpl: SuspendContextImpl,
-        private val dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>,
-        private val dispatcherDropdownMenu: DispatcherDropdownMenu
-    ) : JButton(AllIcons.General.Filter) {
-        init {
-            transparent = true
-            preferredWidth /= 2
-            setToolTip()
-            addActionListener()
-        }
+    inner class LibraryFrameToggle(private val context: GraphBuildingContext
+    ) : ToggleableButton(
+        AllIcons.General.Filter,
+        CoroutineStacksBundle.message("show.library.frames"),
+        CoroutineStacksBundle.message("hide.library.frames"),
+    ) {
+        override var condition by ::areLibraryFramesAllowed
 
-        private fun setToolTip() {
-            toolTipText = if (areLibraryFramesAllowed) {
-                CoroutineStacksBundle.message("hide.library.frames")
-            } else {
-                CoroutineStacksBundle.message("show.library.frames")
-            }
-        }
+        override fun action() = context.rebuildGraph()
+    }
 
-        private fun addActionListener() {
-            addActionListener {
-                areLibraryFramesAllowed = !areLibraryFramesAllowed
-                transparent = areLibraryFramesAllowed
-                setToolTip()
+    inner class CreationFramesToggle(
+        private val context: GraphBuildingContext
+    ) : ToggleableButton(
+        AllIcons.Debugger.ShowCurrentFrame,
+        CoroutineStacksBundle.message("add.creation.frames"),
+        CoroutineStacksBundle.message("remove.creation.frames"),
+    ) {
+        override var condition by ::addCreationFrames
 
-                val selectedDispatcher = dispatcherDropdownMenu.selectedItem as? String
-                val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
-                if (!coroutineDataList.isNullOrEmpty()) {
-                    updateCoroutineStackForest(coroutineDataList, suspendContextImpl)
-                }
-            }
-        }
+        override fun action() = context.rebuildGraph()
     }
 }
 
@@ -360,11 +335,3 @@ private fun Box.replaceContentsWithLabel(content: String) {
     add(label)
     add(Box.createVerticalGlue())
 }
-
-private var JButton.transparent: Boolean
-    get() = !isOpaque
-    set(state) {
-        isOpaque = !state
-        isContentAreaFilled = !state
-        isBorderPainted = false
-    }

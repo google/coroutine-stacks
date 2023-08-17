@@ -19,14 +19,13 @@ package com.nikitanazarov.coroutinestacks.ui
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.ui.JBColor
-import com.intellij.ui.JBColor.BLACK
-import com.intellij.ui.JBColor.BLUE
 import com.intellij.ui.components.JBList
 import com.intellij.util.ui.JBUI
 import com.intellij.xdebugger.frame.XExecutionStack
 import com.intellij.xdebugger.frame.XStackFrame
 import com.nikitanazarov.coroutinestacks.CoroutineTrace
 import org.jetbrains.kotlin.analysis.decompiler.stub.file.ClsClassFinder
+import org.jetbrains.kotlin.idea.debugger.coroutine.data.CreationCoroutineStackFrameItem
 import org.jetbrains.kotlin.idea.debugger.coroutine.view.SimpleColoredTextIconPresentationRenderer
 import java.awt.*
 import java.awt.event.MouseAdapter
@@ -46,6 +45,9 @@ class CoroutineFramesList(
         private val itemBorder = BorderFactory.createMatteBorder(0, 0, 1, 0, JBColor.GRAY)
         private val leftPaddingBorder: Border = JBUI.Borders.emptyLeft(3)
         private val compoundBorder = BorderFactory.createCompoundBorder(itemBorder, leftPaddingBorder)
+        private val creationStackFrameColor = JBColor(0xeaf6ff, 0x4f556b)
+        private val ordinaryBorderColor = JBColor.GRAY
+        private val currentCoroutineBorderColor = JBColor.BLUE
         private const val CORNER_RADIUS = 10
         private const val BORDER_THICKNESS = 1
     }
@@ -55,19 +57,24 @@ class CoroutineFramesList(
 
         val data = mutableListOf<String>()
         data.add(trace.header)
+        val creationFrames = mutableSetOf<String>()
         val renderer = SimpleColoredTextIconPresentationRenderer()
-        data.addAll(trace.stackFrameItems.mapNotNull {
-            it ?: return@mapNotNull null
-            renderer.render(it.location).simpleString()
-        })
+        for (frame in trace.stackFrameItems) {
+            if (frame == null) continue
+            val renderedLocation = renderer.render(frame.location).simpleString()
+            if (frame is CreationCoroutineStackFrameItem) {
+                creationFrames.add(renderedLocation)
+            }
+            data.add(renderedLocation)
+        }
         setListData(data.toTypedArray())
         val lastStackFrame = trace.stackFrameItems[0]?.location.toString()
 
         val breakpointLocation = suspendContext.location.toString()
         val borderColor = if (breakpointLocation == lastStackFrame) {
-            BLUE
+            currentCoroutineBorderColor
         } else {
-            BLACK
+            ordinaryBorderColor
         }
 
         border =  object : LineBorder(borderColor, BORDER_THICKNESS) {
@@ -106,6 +113,11 @@ class CoroutineFramesList(
                     } else if (index < listSize) {
                         toolTipText = value.toString()
                     }
+
+                    if (creationFrames.contains(value)) {
+                        background = creationStackFrameColor
+                    }
+
                     border = when {
                         index < listSize - 1 -> compoundBorder
                         index == listSize - 1 -> leftPaddingBorder
