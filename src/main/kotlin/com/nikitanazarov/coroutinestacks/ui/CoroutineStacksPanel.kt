@@ -38,11 +38,9 @@ import com.intellij.xdebugger.XDebuggerManager
 import com.nikitanazarov.coroutinestacks.CoroutineStacksBundle
 import com.nikitanazarov.coroutinestacks.Node
 import com.nikitanazarov.coroutinestacks.buildCoroutineStackForest
-import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.command.CoroutineDumpAction
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoCache
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
-import org.jetbrains.kotlin.idea.debugger.coroutine.data.State
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.toCompleteCoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.proxy.CoroutineDebugProbesProxy
 import java.awt.Dimension
@@ -148,24 +146,6 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
             dispatcherDropdownMenu,
             coroutineInfoDataList
         )
-        val breakpointLocation = suspendContextImpl.location
-
-        dispatcherToCoroutineDataList.forEach { (dispatcher, coroutineDataList) ->
-            coroutineDataList.forEach { data ->
-                val location: Location?
-                try {
-                    location = data.stackTrace.firstOrNull()?.location
-                } catch(e: Exception) {
-                    emptyText.text = CoroutineStacksBundle.message("nothing.to.show")
-                    return
-                }
-
-                if (data.descriptor.state == State.RUNNING && location == breakpointLocation) {
-                    dispatcherDropdownMenu.selectedItem = dispatcher
-                }
-            }
-        }
-
         val selectedDispatcher = dispatcherDropdownMenu.selectedItem as? String
         val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
         if (!coroutineDataList.isNullOrEmpty()) {
