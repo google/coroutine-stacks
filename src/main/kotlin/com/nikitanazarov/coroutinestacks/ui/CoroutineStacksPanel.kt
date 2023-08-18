@@ -33,9 +33,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.JBColor.GRAY
 import com.intellij.ui.components.JBPanelWithEmptyText
-import com.intellij.ui.util.preferredWidth
 import com.intellij.xdebugger.XDebuggerManager
-import com.nikitanazarov.coroutinestacks.CoroutineStacksBundle
+import com.nikitanazarov.coroutinestacks.CoroutineStacksBundle.message
 import com.nikitanazarov.coroutinestacks.Node
 import com.nikitanazarov.coroutinestacks.buildCoroutineStackForest
 import org.jetbrains.kotlin.idea.debugger.coroutine.command.CoroutineDumpAction
@@ -64,7 +63,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     private val panelBuilderListener = object : DebugProcessListener {
         override fun paused(suspendContext: SuspendContext) {
             val suspendContextImpl = suspendContext as? SuspendContextImpl ?: run {
-                emptyText.text = CoroutineStacksBundle.message("coroutine.stacks.could.not.be.built")
+                emptyText.text = message("coroutine.stacks.could.not.be.built")
                 return
             }
             suspendContextImpl.debugProcess.managerThread.schedule(BuildCoroutineGraphCommand(suspendContextImpl))
@@ -101,7 +100,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     init {
         areLibraryFramesAllowed = true
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
-        emptyText.text = CoroutineStacksBundle.message("no.java.debug.process.is.running")
+        emptyText.text = message("no.java.debug.process.is.running")
         val currentSession = XDebuggerManager.getInstance(project).currentSession
         if (currentSession != null) {
             val javaDebugProcess = currentSession.debugProcess as? JavaDebugProcess
@@ -116,7 +115,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         project.messageBus.connect()
             .subscribe<DebuggerManagerListener>(DebuggerManagerListener.TOPIC, object : DebuggerManagerListener {
                 override fun sessionAttached(session: DebuggerSession?) {
-                    emptyText.text = CoroutineStacksBundle.message("should.be.stopped.on.a.breakpoint")
+                    emptyText.text = message("should.be.stopped.on.a.breakpoint")
                 }
 
                 override fun sessionCreated(session: DebuggerSession) {
@@ -124,7 +123,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
                 }
 
                 override fun sessionRemoved(session: DebuggerSession) {
-                    emptyText.text = CoroutineStacksBundle.message("no.java.debug.process.is.running")
+                    emptyText.text = message("no.java.debug.process.is.running")
                     emptyText.component.isVisible = true
                     removeAll()
                     panelContent.removeAll()
@@ -137,7 +136,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         try {
             coroutineInfoCache = CoroutineDebugProbesProxy(suspendContextImpl).dumpCoroutines()
         } catch(e: Exception) {
-            emptyText.text = CoroutineStacksBundle.message("nothing.to.show")
+            emptyText.text = message("nothing.to.show")
             return
         }
 
@@ -166,7 +165,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         suspendContextImpl: SuspendContextImpl
     ) {
         runInEdt {
-            forest.replaceContentsWithLabel(CoroutineStacksBundle.message("panel.updating"))
+            forest.replaceContentsWithLabel(message("panel.updating"))
             updateUI()
         }
 
@@ -182,7 +181,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
                 )
                 if (coroutineStackForest == null) {
                     runInEdt {
-                        forest.replaceContentsWithLabel(CoroutineStacksBundle.message("nothing.to.show"))
+                        forest.replaceContentsWithLabel(message("nothing.to.show"))
                         updateUI()
                     }
                     return
@@ -214,72 +213,56 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         }
     }
 
-    inner class CaptureDumpButton(context: GraphBuildingContext) : JButton(AllIcons.Actions.Dump) {
-        init {
-            transparent = true
-            preferredWidth /= 2
-            toolTipText = CoroutineStacksBundle.message("get.coroutine.dump")
-            addActionListener {
-                val suspendContext = context.suspendContext
-                val process = suspendContext.debugProcess
-                val session = process.session
-                process.managerThread.schedule(object : SuspendContextCommandImpl(suspendContext) {
-                    override fun contextAction(suspendContext: SuspendContextImpl) {
-                        ApplicationManager.getApplication().invokeLater({
-                            val ui = session.xDebugSession?.ui ?: return@invokeLater
-                            val coroutines = context.dispatcherToCoroutineDataList
-                                .values
-                                .flatten()
-                                .map { it.toCompleteCoroutineInfoData() }
-                            CoroutineDumpAction().addCoroutineDump(project, coroutines, ui, session.searchScope)
-                        }, ModalityState.NON_MODAL)
-                    }
-                })
-            }
-        }
-    }
-
-    inner class ZoomToOriginalSizeButton : JButton() {
-        init {
-            setupUI()
-            addActionListener {
-                coroutineStackForest?.scale(-zoomLevel)
-                zoomLevel = 0f
-            }
-        }
-
-        private fun setupUI() {
-            transparent = false
-            text = CoroutineStacksBundle.message("zoom.to.original.size.button.label")
-            toolTipText = CoroutineStacksBundle.message("zoom.to.original.size.button.hint")
-        }
-    }
-
-    inner class ZoomInButton : JButton(AllIcons.General.ZoomIn) {
-        init {
-            toolTipText = CoroutineStacksBundle.message("zoom.in.button.hint")
-            transparent = false
-            addActionListener {
-                if (zoomLevel > MAXIMUM_ZOOM_LEVEL) {
-                    return@addActionListener
+    inner class CaptureDumpButton(
+        private val context: GraphBuildingContext
+    ) : PanelButton(AllIcons.Actions.Dump,  message("get.coroutine.dump")) {
+        override fun action() {
+            val suspendContext = context.suspendContext
+            val process = suspendContext.debugProcess
+            val session = process.session
+            process.managerThread.schedule(object : SuspendContextCommandImpl(suspendContext) {
+                override fun contextAction(suspendContext: SuspendContextImpl) {
+                    ApplicationManager.getApplication().invokeLater({
+                        val ui = session.xDebugSession?.ui ?: return@invokeLater
+                        val coroutines = context.dispatcherToCoroutineDataList
+                            .values
+                            .flatten()
+                            .map { it.toCompleteCoroutineInfoData() }
+                        CoroutineDumpAction().addCoroutineDump(project, coroutines, ui, session.searchScope)
+                    }, ModalityState.NON_MODAL)
                 }
-                zoomLevel += SCALE_FACTOR
-                coroutineStackForest?.scale(SCALE_FACTOR)
-            }
+            })
         }
     }
 
-    inner class ZoomOutButton : JButton(AllIcons.General.ZoomOut) {
+    inner class ZoomToOriginalSizeButton : PanelButton(message("zoom.to.original.size.button.hint")) {
         init {
-            toolTipText = CoroutineStacksBundle.message("zoom.out.button.hint")
-            transparent = false
-            addActionListener {
-                if (zoomLevel < MINIMUM_ZOOM_LEVEL) {
-                    return@addActionListener
-                }
-                zoomLevel -= SCALE_FACTOR
-                coroutineStackForest?.scale(-SCALE_FACTOR)
+            text = message("zoom.to.original.size.button.label")
+        }
+
+        override fun action() {
+            coroutineStackForest?.scale(-zoomLevel)
+            zoomLevel = 0f
+        }
+    }
+
+    inner class ZoomInButton : PanelButton(AllIcons.General.ZoomIn, message("zoom.in.button.hint")) {
+        override fun action() {
+            if (zoomLevel > MAXIMUM_ZOOM_LEVEL) {
+                return
             }
+            zoomLevel += SCALE_FACTOR
+            coroutineStackForest?.scale(SCALE_FACTOR)
+        }
+    }
+
+    inner class ZoomOutButton : PanelButton(AllIcons.General.ZoomOut, message("zoom.out.button.hint")) {
+        override fun action() {
+            if (zoomLevel < MINIMUM_ZOOM_LEVEL) {
+                return
+            }
+            zoomLevel -= SCALE_FACTOR
+            coroutineStackForest?.scale(-SCALE_FACTOR)
         }
     }
 
@@ -300,10 +283,10 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     }
 
     inner class LibraryFrameToggle(private val context: GraphBuildingContext
-    ) : ToggleableButton(
+    ) : PanelToggleableButton(
         AllIcons.General.Filter,
-        CoroutineStacksBundle.message("show.library.frames"),
-        CoroutineStacksBundle.message("hide.library.frames"),
+        message("show.library.frames"),
+        message("hide.library.frames"),
     ) {
         override var condition by ::areLibraryFramesAllowed
 
@@ -312,10 +295,10 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
 
     inner class CreationFramesToggle(
         private val context: GraphBuildingContext
-    ) : ToggleableButton(
+    ) : PanelToggleableButton(
         AllIcons.Debugger.Frame,
-        CoroutineStacksBundle.message("add.creation.frames"),
-        CoroutineStacksBundle.message("remove.creation.frames"),
+        message("add.creation.frames"),
+        message("remove.creation.frames"),
     ) {
         override var condition by ::addCreationFrames
 
