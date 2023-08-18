@@ -24,6 +24,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.xdebugger.frame.XExecutionStack
 import com.intellij.xdebugger.frame.XStackFrame
 import com.nikitanazarov.coroutinestacks.CoroutineTrace
+import com.nikitanazarov.coroutinestacks.isLibraryFrame
 import org.jetbrains.kotlin.analysis.decompiler.stub.file.ClsClassFinder
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CreationCoroutineStackFrameItem
 import org.jetbrains.kotlin.idea.debugger.coroutine.view.SimpleColoredTextIconPresentationRenderer
@@ -37,15 +38,20 @@ import javax.swing.JList
 import javax.swing.border.Border
 import javax.swing.border.LineBorder
 
+sealed class ListItem(val text: String)
+class Header(text: String) : ListItem(text)
+class Frame(location: String, val isCreationFrame: Boolean, val isLibraryFrame: Boolean) : ListItem(location)
+
 class CoroutineFramesList(
     suspendContext: SuspendContextImpl,
     trace: CoroutineTrace
-) : JBList<String>() {
+) : JBList<ListItem>() {
     companion object {
         private val itemBorder = BorderFactory.createMatteBorder(0, 0, 1, 0, JBColor.GRAY)
         private val leftPaddingBorder: Border = JBUI.Borders.emptyLeft(3)
         private val compoundBorder = BorderFactory.createCompoundBorder(itemBorder, leftPaddingBorder)
-        private val creationStackFrameColor = JBColor(0xeaf6ff, 0x4f556b)
+        private val creationFrameColor = JBColor(0xeaf6ff, 0x4f556b)
+        private val libraryFrameColor = JBColor(0xffffe4, 0x4f4b41)
         private val ordinaryBorderColor = JBColor.GRAY
         private val currentCoroutineBorderColor = JBColor.BLUE
         private const val CORNER_RADIUS = 10
@@ -53,30 +59,9 @@ class CoroutineFramesList(
     }
 
     init {
-        val debugProcess = suspendContext.debugProcess
+        setListData(buildList(suspendContext, trace))
 
-        val data = mutableListOf<String>()
-        data.add(trace.header)
-        val creationFrames = mutableSetOf<String>()
-        val renderer = SimpleColoredTextIconPresentationRenderer()
-        for (frame in trace.stackFrameItems) {
-            if (frame == null) continue
-            val renderedLocation = renderer.render(frame.location).simpleString()
-            if (frame is CreationCoroutineStackFrameItem) {
-                creationFrames.add(renderedLocation)
-            }
-            data.add(renderedLocation)
-        }
-        setListData(data.toTypedArray())
-        val lastStackFrame = trace.stackFrameItems[0]?.location.toString()
-
-        val breakpointLocation = suspendContext.location.toString()
-        val borderColor = if (breakpointLocation == lastStackFrame) {
-            currentCoroutineBorderColor
-        } else {
-            ordinaryBorderColor
-        }
-
+        val borderColor = trace.getBorderColor(suspendContext)
         border =  object : LineBorder(borderColor, BORDER_THICKNESS) {
             override fun getBorderInsets(c: Component?): Insets {
                 val insets = super.getBorderInsets(c)
@@ -101,27 +86,33 @@ class CoroutineFramesList(
                 cellHasFocus: Boolean
             ): Component {
                 val stackFrameRenderer = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-                if (stackFrameRenderer !is JComponent) {
+                if (stackFrameRenderer !is JComponent || value !is ListItem) {
                     return stackFrameRenderer
                 }
 
                 with(stackFrameRenderer) {
+                    text = value.text
+
                     val listSize = list.model.size
-                    if (index == 0) {
-                        toolTipText = trace.coroutinesActiveLabel
-                        font = font.deriveFont(Font.BOLD)
-                    } else if (index < listSize) {
-                        toolTipText = value.toString()
-                    }
-
-                    if (creationFrames.contains(value)) {
-                        background = creationStackFrameColor
-                    }
-
                     border = when {
                         index < listSize - 1 -> compoundBorder
                         index == listSize - 1 -> leftPaddingBorder
                         else -> null
+                    }
+
+                    when (value) {
+                        is Header -> {
+                            toolTipText = trace.coroutinesActiveLabel
+                            font = font.deriveFont(Font.BOLD)
+                        }
+                        is Frame -> {
+                            toolTipText = value.text
+                            if (value.isCreationFrame) {
+                                background = creationFrameColor
+                            } else if (value.isLibraryFrame) {
+                                background = libraryFrameColor
+                            }
+                        }
                     }
                 }
 
@@ -135,7 +126,7 @@ class CoroutineFramesList(
                 val index = list.locationToIndex(e.point).takeIf { it > 0 } ?: return
                 val stackFrameItem = trace.stackFrameItems[index - 1] ?: return
 
-                val frame = stackFrameItem.createFrame(debugProcess)
+                val frame = stackFrameItem.createFrame(suspendContext.debugProcess)
                 val xExecutionStack = suspendContext.activeExecutionStack as? XExecutionStack
                 if (xExecutionStack != null && frame != null) {
                     suspendContext.setCurrentStackFrame(xExecutionStack, frame)
@@ -143,6 +134,34 @@ class CoroutineFramesList(
             }
         })
     }
+
+    private fun CoroutineTrace.getBorderColor(suspendContext: SuspendContextImpl): Color {
+        val lastStackFrame = stackFrameItems.firstOrNull()?.location
+        val breakpointLocation = suspendContext.location
+        return if (breakpointLocation == lastStackFrame) {
+            currentCoroutineBorderColor
+        } else {
+            ordinaryBorderColor
+        }
+    }
+}
+
+private fun buildList(suspendContext: SuspendContextImpl, trace: CoroutineTrace): Array<ListItem> {
+    val data = mutableListOf<ListItem>()
+    data.add(Header(trace.header))
+
+    val renderer = SimpleColoredTextIconPresentationRenderer()
+    for (frame in trace.stackFrameItems) {
+        if (frame == null) continue
+        val renderedLocation = renderer.render(frame.location).simpleString()
+        data.add(Frame(
+            renderedLocation,
+            frame is CreationCoroutineStackFrameItem,
+            frame.isLibraryFrame(suspendContext)
+        ))
+    }
+
+    return data.toTypedArray()
 }
 
 // Copied from org.jetbrains.kotlin.idea.debugger.coroutine.view.CoroutineSelectedNodeListener#setCurrentStackFrame

@@ -61,7 +61,7 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
     if (traces.isEmpty()) {
         return null
     }
-    val vertexData = mutableListOf<JBList<String>?>()
+    val vertexData = mutableListOf<JBList<*>?>()
     val componentData = mutableListOf<Component>()
     var previousListSelection: JBList<*>? = null
     var maxWidth = 0
@@ -217,7 +217,7 @@ fun buildStackFrameGraph(
     }
 }
 
-private fun CoroutineStackFrameItem.isLibraryFrame(suspendContext: SuspendContextImpl): Boolean {
+internal fun CoroutineStackFrameItem.isLibraryFrame(suspendContext: SuspendContextImpl): Boolean {
     val xStackFrame = createFrame(suspendContext.debugProcess)
     val jvmStackFrameInfoProvider = (xStackFrame as? JVMStackFrameInfoProvider) ?: return false
     return jvmStackFrameInfoProvider.isInLibraryContent
