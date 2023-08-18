@@ -313,7 +313,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     inner class CreationFramesToggle(
         private val context: GraphBuildingContext
     ) : ToggleableButton(
-        AllIcons.Debugger.ShowCurrentFrame,
+        AllIcons.Debugger.Frame,
         CoroutineStacksBundle.message("add.creation.frames"),
         CoroutineStacksBundle.message("remove.creation.frames"),
     ) {
