@@ -67,13 +67,13 @@ class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 5
         val widthToDrawSubtree = Array(size) { -xPadding }
         val ys = Array(size) { 0 }
         val xs = Array(size) { 0 }
-        val numChildren = Array(size) { 0 }
+        val childrenIndices = Array(size) { mutableListOf<Int>() }
         val parentSize = parent.size
         var currentHeight = parentSize.height - yPadding
         parent.dfs(object : ComponentVisitor {
             override fun visitComponent(parentIndex: Int, index: Int) {
                 if (parentIndex != -1) {
-                    numChildren[parentIndex] += 1
+                    childrenIndices[parentIndex].add(index)
                 }
 
                 currentHeight -= parent.getComponentSize(index).height
@@ -98,15 +98,17 @@ class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 5
         var mostRightX = 0
         parent.dfs(object : ComponentVisitor {
             override fun leaveComponent(parentIndex: Int, index: Int) {
-                if (numChildren[index] == 0) {
+                val numChildren = childrenIndices[index].size
+                if (numChildren == 0) {
                     xs[index] = mostRightX + xPadding
                     mostRightX += xPadding + parent.getComponentSize(index).width
+                } else if (numChildren % 2 == 0) {
+                    for (child in childrenIndices[index]) {
+                        xs[index] += xs[child]
+                    }
+                    xs[index] /= numChildren
                 } else {
-                    xs[index] /= numChildren[index]
-                }
-
-                if (parentIndex != -1) {
-                    xs[parentIndex] += xs[index]
+                    xs[index] = xs[childrenIndices[index][numChildren / 2]]
                 }
             }
         })
