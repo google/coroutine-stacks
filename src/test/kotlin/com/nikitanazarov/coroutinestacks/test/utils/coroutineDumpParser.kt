@@ -80,7 +80,10 @@ private fun buildForestFromTraces(traces: List<CoroutineTrace?>): String = build
 
         val indentation = currentIndentation.joinToString("")
         append(indentation)
-        append(trace.header)
+
+        val totalCoroutines = trace.runningCount + trace.suspendedCount
+        val header = "$totalCoroutines " + if (totalCoroutines > 1) "Coroutines" else "Coroutine"
+        append(header)
         append(trace.coroutinesActiveLabel.replace("\n", ","))
         for (frame in trace.stackFrameItems.reversed()) {
             val label = (frame?.location as? MockLocation)?.label

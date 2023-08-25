@@ -25,6 +25,7 @@ import com.nikitanazarov.coroutinestacks.ui.*
 import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineStackFrameItem
+import org.jetbrains.kotlin.idea.debugger.coroutine.data.State
 import org.jetbrains.kotlin.idea.debugger.coroutine.util.CoroutineFrameBuilder
 import java.awt.Component
 import java.util.*
@@ -32,13 +33,16 @@ import java.util.*
 data class Node(
     val stackFrameItem: CoroutineStackFrameItem? = null,
     var num: Int = 0, // Represents how many coroutines have this frame in their stack trace
+    var runningCount: Int = 0,
+    var suspendedCount: Int = 0,
     val children: MutableMap<Location, Node> = mutableMapOf(),
     var coroutinesActive: String = ""
 )
 
 data class CoroutineTrace(
     val stackFrameItems: MutableList<CoroutineStackFrameItem?>,
-    val header: String,
+    val runningCount: Int,
+    val suspendedCount: Int,
     val coroutinesActiveLabel: String
 )
 
@@ -127,16 +131,12 @@ fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
     while (stack.isNotEmpty()) {
         val (currentNode, currentLevel) = stack.pop()
         val parent = if (parentStack.isNotEmpty()) parentStack.pop() else null
-        val coroutineStackHeader = if (currentNode.num > 1) {
-            CoroutineStacksBundle.message("number.of.coroutines", currentNode.num)
-        } else {
-            CoroutineStacksBundle.message("number.of.coroutine")
-        }
 
         if (parent != null && parent.num != currentNode.num) {
             val currentTrace = CoroutineTrace(
                 mutableListOf(currentNode.stackFrameItem),
-                coroutineStackHeader,
+                currentNode.runningCount,
+                currentNode.suspendedCount,
                 currentNode.coroutinesActive
             )
             repeat((previousLevel ?: 0) - currentLevel + 1) {
@@ -204,12 +204,16 @@ fun buildStackFrameGraph(
             if (isFrameAllowed(stackFrame)) {
                 val location = stackFrame.location
                 val child = currentNode.children.getOrPut(location) {
-                    Node(stackFrame, 0, mutableMapOf(), "")
+                    Node(stackFrame, children = mutableMapOf())
                 }
 
                 child.num++
-                child.coroutinesActive += with(coroutineData.descriptor) {
-                    "${name}${id} ${state}\n"
+                coroutineData.descriptor.apply {
+                    child.coroutinesActive += "${name}${id} ${state}\n"
+                    if (state == State.SUSPENDED)
+                        child.suspendedCount++
+                    else if (state == State.RUNNING)
+                        child.runningCount++
                 }
                 currentNode = child
             }

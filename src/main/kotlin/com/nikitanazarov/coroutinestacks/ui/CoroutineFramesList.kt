@@ -17,8 +17,10 @@
 package com.nikitanazarov.coroutinestacks.ui
 
 import com.intellij.debugger.engine.SuspendContextImpl
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.ui.JBColor
+import com.intellij.ui.RowIcon
 import com.intellij.ui.components.JBList
 import com.intellij.util.ui.JBUI
 import com.intellij.xdebugger.frame.XExecutionStack
@@ -31,15 +33,12 @@ import org.jetbrains.kotlin.idea.debugger.coroutine.view.SimpleColoredTextIconPr
 import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.BorderFactory
-import javax.swing.DefaultListCellRenderer
-import javax.swing.JComponent
-import javax.swing.JList
+import javax.swing.*
 import javax.swing.border.Border
 import javax.swing.border.LineBorder
 
 sealed class ListItem(val text: String)
-class Header(text: String) : ListItem(text)
+class Header(text: String, val icon: Icon) : ListItem(text)
 class Frame(location: String, val isCreationFrame: Boolean, val isLibraryFrame: Boolean) : ListItem(location)
 
 class CoroutineFramesList(
@@ -50,10 +49,16 @@ class CoroutineFramesList(
         private val itemBorder = BorderFactory.createMatteBorder(0, 0, 1, 0, JBColor.GRAY)
         private val leftPaddingBorder: Border = JBUI.Borders.emptyLeft(3)
         private val compoundBorder = BorderFactory.createCompoundBorder(itemBorder, leftPaddingBorder)
+
         private val creationFrameColor = JBColor(0xeaf6ff, 0x4f556b)
         private val libraryFrameColor = JBColor(0xffffe4, 0x4f4b41)
         private val ordinaryBorderColor = JBColor.GRAY
         private val currentCoroutineBorderColor = JBColor.BLUE
+
+        private val runningIcon = AllIcons.Debugger.ThreadRunning
+        private val suspendedIcon = AllIcons.Debugger.ThreadFrozen
+        private val allStatesIcon = RowIcon(runningIcon, suspendedIcon)
+
         private const val CORNER_RADIUS = 10
         private const val BORDER_THICKNESS = 1
     }
@@ -102,6 +107,7 @@ class CoroutineFramesList(
 
                     when (value) {
                         is Header -> {
+                            icon = value.icon
                             toolTipText = trace.coroutinesActiveLabel
                             font = font.deriveFont(Font.BOLD)
                         }
@@ -144,24 +150,36 @@ class CoroutineFramesList(
             ordinaryBorderColor
         }
     }
-}
 
-private fun buildList(suspendContext: SuspendContextImpl, trace: CoroutineTrace): Array<ListItem> {
-    val data = mutableListOf<ListItem>()
-    data.add(Header(trace.header))
+    private fun buildList(suspendContext: SuspendContextImpl, trace: CoroutineTrace): Array<ListItem> {
+        val data = mutableListOf<ListItem>()
+        val header = with(trace) {
+            when {
+                runningCount != 0 && suspendedCount != 0 ->
+                    Header("$runningCount Running, $suspendedCount Suspended", allStatesIcon)
+                runningCount != 0 ->
+                    Header("$runningCount Running", runningIcon)
+                suspendedCount != 0 ->
+                    Header("$suspendedCount Suspended", suspendedIcon)
+                else ->
+                    return emptyArray()
+            }
+        }
+        data.add(header)
 
-    val renderer = SimpleColoredTextIconPresentationRenderer()
-    for (frame in trace.stackFrameItems) {
-        if (frame == null) continue
-        val renderedLocation = renderer.render(frame.location).simpleString()
-        data.add(Frame(
-            renderedLocation,
-            frame is CreationCoroutineStackFrameItem,
-            frame.isLibraryFrame(suspendContext)
-        ))
+        val renderer = SimpleColoredTextIconPresentationRenderer()
+        for (frame in trace.stackFrameItems) {
+            if (frame == null) continue
+            val renderedLocation = renderer.render(frame.location).simpleString()
+            data.add(Frame(
+                renderedLocation,
+                frame is CreationCoroutineStackFrameItem,
+                frame.isLibraryFrame(suspendContext)
+            ))
+        }
+
+        return data.toTypedArray()
     }
-
-    return data.toTypedArray()
 }
 
 // Copied from org.jetbrains.kotlin.idea.debugger.coroutine.view.CoroutineSelectedNodeListener#setCurrentStackFrame

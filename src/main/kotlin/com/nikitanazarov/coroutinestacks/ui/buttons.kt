@@ -41,12 +41,13 @@ abstract class PanelButton(tooltip: String) : JButton() {
 abstract class PanelToggleableButton(
     icon: Icon,
     private val falseConditionText: String,
-    private val trueConditionText: String
+    private val trueConditionText: String,
+    isTransparent: Boolean = true
 ) : JButton(icon) {
     abstract var condition: Boolean
 
     init {
-        transparent = true
+        transparent = isTransparent
         setToolTip()
         addActionListener {
             condition = !condition

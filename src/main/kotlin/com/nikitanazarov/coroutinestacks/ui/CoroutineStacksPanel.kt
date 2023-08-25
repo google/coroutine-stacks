@@ -31,6 +31,10 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.wm.ToolWindow
+import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.wm.ex.ToolWindowManagerListener
+import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.JBColor.GRAY
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.xdebugger.XDebuggerManager
@@ -51,49 +55,36 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         const val MAXIMUM_ZOOM_LEVEL = 1f
         const val MINIMUM_ZOOM_LEVEL = -0.5
         const val SCALE_FACTOR = 0.1f
+
+        // Should be the same as in plugin.xml
+        const val COROUTINE_STACKS_TOOL_WINDOW_ID = "Coroutine Stacks"
     }
 
     private val panelContent = Box.createVerticalBox()
     private val forest = Box.createVerticalBox()
-    private var coroutineStackForest : ZoomableJBScrollPane? = null
+    private val loadingCoroutineDataLabel = JLabel(message("loading.coroutine.data"), AnimatedIcon.Default(), SwingConstants.LEFT)
+    private val buildingPanelLabel = JLabel(message("building.panel"), AnimatedIcon.Default(), SwingConstants.LEFT)
+    private var coroutineStackForest: ZoomableJBScrollPane? = null
+
     private var zoomLevel = 0f
-    private var areLibraryFramesAllowed: Boolean = true
-    private var addCreationFrames: Boolean = false
+    private var isPanelAlreadyBuilt = false
+    private var isToolWindowActive = false
+    private var addCreationFrames = false
+    var areLibraryFramesAllowed = true
 
     private val panelBuilderListener = object : DebugProcessListener {
         override fun paused(suspendContext: SuspendContext) {
-            val suspendContextImpl = suspendContext as? SuspendContextImpl ?: run {
+            isPanelAlreadyBuilt = false
+            if (suspendContext !is SuspendContextImpl) {
                 emptyText.text = message("coroutine.stacks.could.not.be.built")
                 return
             }
-            suspendContextImpl.debugProcess.managerThread.schedule(BuildCoroutineGraphCommand(suspendContextImpl))
+            scheduleBuildPanelCommand(suspendContext)
         }
 
         override fun resumed(suspendContext: SuspendContext?) {
             panelContent.removeAll()
-        }
-    }
-
-    inner class BuildCoroutineGraphCommand(suspendContext: SuspendContextImpl) : SuspendContextCommandImpl(suspendContext) {
-        override fun contextAction(suspendContext: SuspendContextImpl) {
-            emptyText.component.isVisible = false
-            buildCoroutineGraph(suspendContext)
-        }
-
-        override fun getPriority() =
-            PrioritizedTask.Priority.LOW
-    }
-
-    inner class GraphBuildingContext(
-        val suspendContext: SuspendContextImpl,
-        val dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>,
-        var selectedDispatcher: String?
-    ) {
-        fun rebuildGraph() {
-            val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
-            if (!coroutineDataList.isNullOrEmpty()) {
-                updateCoroutineStackForest(coroutineDataList, suspendContext)
-            }
+            panelContent.add(forest)
         }
     }
 
@@ -101,16 +92,34 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         areLibraryFramesAllowed = true
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         emptyText.text = message("no.java.debug.process.is.running")
-        val currentSession = XDebuggerManager.getInstance(project).currentSession
-        if (currentSession != null) {
-            val javaDebugProcess = currentSession.debugProcess as? JavaDebugProcess
-            val currentProcess = javaDebugProcess?.debuggerSession?.process
-            if (currentProcess != null) {
-                val suspendContext = currentProcess.suspendManager.pausedContext
-                currentProcess.managerThread.schedule(BuildCoroutineGraphCommand(suspendContext))
-                currentProcess.addDebugProcessListener(panelBuilderListener)
-            }
-        }
+
+        project.messageBus.connect()
+            .subscribe<ToolWindowManagerListener>(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
+                override fun stateChanged(
+                    toolWindowManager: ToolWindowManager,
+                    changeType: ToolWindowManagerListener.ToolWindowManagerEventType
+                ) {
+                    if (toolWindowManager.lastActiveToolWindowId != COROUTINE_STACKS_TOOL_WINDOW_ID) {
+                        return
+                    }
+
+                    when (changeType) {
+                        ToolWindowManagerListener.ToolWindowManagerEventType.HideToolWindow -> isToolWindowActive = false
+                        ToolWindowManagerListener.ToolWindowManagerEventType.ActivateToolWindow -> {
+                            isToolWindowActive = true
+                            val suspendContext = project.getSuspendContext() ?: return
+                            scheduleBuildPanelCommand(suspendContext)
+                        }
+                        else -> {}
+                    }
+                }
+
+                override fun toolWindowShown(toolWindow: ToolWindow) {
+                    if (toolWindow.id == COROUTINE_STACKS_TOOL_WINDOW_ID) {
+                        isToolWindowActive = true
+                    }
+                }
+            })
 
         project.messageBus.connect()
             .subscribe<DebuggerManagerListener>(DebuggerManagerListener.TOPIC, object : DebuggerManagerListener {
@@ -127,11 +136,14 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
                     emptyText.component.isVisible = true
                     removeAll()
                     panelContent.removeAll()
+                    panelContent.add(forest)
                 }
             })
     }
 
     private fun buildCoroutineGraph(suspendContextImpl: SuspendContextImpl) {
+        forest.replaceContentsWithLabel(loadingCoroutineDataLabel)
+
         val coroutineInfoCache: CoroutineInfoCache
         try {
             coroutineInfoCache = CoroutineDebugProbesProxy(suspendContextImpl).dumpCoroutines()
@@ -164,11 +176,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         coroutineDataList: List<CoroutineInfoData>,
         suspendContextImpl: SuspendContextImpl
     ) {
-        runInEdt {
-            forest.replaceContentsWithLabel(message("panel.updating"))
-            updateUI()
-        }
-
+        forest.replaceContentsWithLabel(buildingPanelLabel)
         suspendContextImpl.debugProcess.managerThread.invoke(object : DebuggerCommandImpl() {
             override fun action() {
                 val root = Node()
@@ -180,10 +188,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
                     zoomLevel,
                 )
                 if (coroutineStackForest == null) {
-                    runInEdt {
-                        forest.replaceContentsWithLabel(message("nothing.to.show"))
-                        updateUI()
-                    }
+                    forest.replaceContentsWithLabel(message("nothing.to.show"))
                     return
                 }
 
@@ -197,6 +202,36 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
                 }
             }
         })
+    }
+
+    private fun scheduleBuildPanelCommand(suspendContext: SuspendContextImpl) {
+        if (!isToolWindowActive || isPanelAlreadyBuilt) {
+            return
+        }
+
+        suspendContext.debugProcess.managerThread.schedule(object : SuspendContextCommandImpl(suspendContext) {
+            override fun contextAction(suspendContext: SuspendContextImpl) {
+                emptyText.component.isVisible = false
+                buildCoroutineGraph(suspendContext)
+            }
+
+            override fun getPriority() =
+                PrioritizedTask.Priority.LOW
+        })
+        isPanelAlreadyBuilt = true
+    }
+
+    inner class GraphBuildingContext(
+        val suspendContext: SuspendContextImpl,
+        val dispatcherToCoroutineDataList: Map<String, List<CoroutineInfoData>>,
+        var selectedDispatcher: String?
+    ) {
+        fun rebuildGraph() {
+            val coroutineDataList = dispatcherToCoroutineDataList[selectedDispatcher]
+            if (!coroutineDataList.isNullOrEmpty()) {
+                updateCoroutineStackForest(coroutineDataList, suspendContext)
+            }
+        }
     }
 
     inner class CoroutineStacksPanelHeader(context: GraphBuildingContext) : Box(BoxLayout.X_AXIS) {
@@ -287,6 +322,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         AllIcons.General.Filter,
         message("show.library.frames"),
         message("hide.library.frames"),
+        areLibraryFramesAllowed
     ) {
         override var condition by ::areLibraryFramesAllowed
 
@@ -298,7 +334,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     ) : PanelToggleableButton(
         AllIcons.Debugger.Frame,
         message("add.creation.frames"),
-        message("remove.creation.frames"),
+        message("remove.creation.frames")
     ) {
         override var condition by ::addCreationFrames
 
@@ -308,13 +344,26 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
 
 private fun Box.replaceContentsWithLabel(content: String) {
     val label = JLabel(content)
-    label.apply {
-        alignmentX = JBPanelWithEmptyText.CENTER_ALIGNMENT
-        alignmentY = JBPanelWithEmptyText.CENTER_ALIGNMENT
-        foreground = GRAY
+    replaceContentsWithLabel(label)
+}
+
+private fun Box.replaceContentsWithLabel(label: JLabel) {
+    runInEdt {
+        label.apply {
+            alignmentX = JBPanelWithEmptyText.CENTER_ALIGNMENT
+            alignmentY = JBPanelWithEmptyText.CENTER_ALIGNMENT
+            foreground = GRAY
+        }
+        removeAll()
+        add(Box.createVerticalGlue())
+        add(label)
+        add(Box.createVerticalGlue())
+        updateUI()
     }
-    removeAll()
-    add(Box.createVerticalGlue())
-    add(label)
-    add(Box.createVerticalGlue())
+}
+
+private fun Project.getSuspendContext(): SuspendContextImpl? {
+    val currentSession = XDebuggerManager.getInstance(this).currentSession ?: return null
+    val currentProcess = (currentSession.debugProcess as? JavaDebugProcess)?.debuggerSession?.process ?: return null
+    return currentProcess.suspendManager.pausedContext
 }
