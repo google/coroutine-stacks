@@ -9,7 +9,7 @@ This project is dedicated to creating an Intellij Plugin that will enhance the c
 
 2) After fork is completed, click on Code button and copy the git url
 
-3) open terminal and run command
+3) Open terminal and run command
    ```
    git clone <your-git-url>
    cd coroutine-stacks
