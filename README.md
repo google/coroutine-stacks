@@ -6,10 +6,8 @@ This project is dedicated to creating an Intellij Plugin that will enhance the c
 # Setup project in your local enviroment
 
 1) Fork the repository
-   ![image](https://github.com/nikita-nazarov/coroutine-stacks/assets/77321971/14487935-3519-4cda-abad-dfa4d9c46f27)
 
 2) After fork is completed, click on Code button and copy the git url
-  ![image](https://github.com/nikita-nazarov/coroutine-stacks/assets/77321971/f26c77cb-4012-4e81-be4d-9f48a8778680)
 
 3) open terminal and run command
    ```
