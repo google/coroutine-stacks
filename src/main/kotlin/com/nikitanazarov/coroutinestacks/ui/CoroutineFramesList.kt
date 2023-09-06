@@ -113,10 +113,12 @@ class CoroutineFramesList(
                         }
                         is Frame -> {
                             toolTipText = value.text
-                            if (value.isCreationFrame) {
-                                background = creationFrameColor
-                            } else if (value.isLibraryFrame) {
-                                background = libraryFrameColor
+                            if (!isSelected) {
+                                if (value.isCreationFrame) {
+                                    background = creationFrameColor
+                                } else if (value.isLibraryFrame) {
+                                    background = libraryFrameColor
+                                }
                             }
                         }
                     }
