@@ -16,7 +16,6 @@
 
 package com.nikitanazarov.coroutinestacks.ui
 
-import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.util.preferredHeight
 import com.intellij.ui.util.preferredWidth
@@ -40,13 +39,22 @@ class ZoomableJBScrollPane(
         val view = viewport.view as? Container ?: return
 
         view.components.forEach { component ->
-            if (component is JBList<*>) {
+            if (component is CoroutineFramesList) {
                 component.zoom(scaleFactor)
             }
         }
     }
 
-    private fun <E> JBList<E>.zoom(scaleFactor: Float) {
+    private fun CoroutineFramesList.zoom(scaleFactor: Float) {
+        if (model.size == 0) {
+            return
+        }
+
+        val header = model.getElementAt(0) as? Header
+        if (header != null) {
+            header.scale += scaleFactor
+        }
+
         font = font.deriveFont(font.size2D + preferredFontSize * scaleFactor)
         preferredWidth += (averagePreferredWidth * scaleFactor).toInt()
         fixedCellHeight += (averagePreferredCellHeight * scaleFactor).toInt()

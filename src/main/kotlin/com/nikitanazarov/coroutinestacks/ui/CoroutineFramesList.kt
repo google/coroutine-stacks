@@ -22,6 +22,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.ui.JBColor
 import com.intellij.ui.RowIcon
 import com.intellij.ui.components.JBList
+import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import com.intellij.xdebugger.frame.XExecutionStack
 import com.intellij.xdebugger.frame.XStackFrame
@@ -38,7 +39,7 @@ import javax.swing.border.Border
 import javax.swing.border.LineBorder
 
 sealed class ListItem(val text: String)
-class Header(text: String, val icon: Icon) : ListItem(text)
+class Header(text: String, val icon: Icon, var scale: Float = 1.0F) : ListItem(text)
 class Frame(location: String, val isCreationFrame: Boolean, val isLibraryFrame: Boolean) : ListItem(location)
 
 class CoroutineFramesList(
@@ -107,7 +108,7 @@ class CoroutineFramesList(
 
                     when (value) {
                         is Header -> {
-                            icon = value.icon
+                            icon = IconUtil.scale(value.icon, null, value.scale)
                             toolTipText = trace.coroutinesActiveLabel
                             font = font.deriveFont(Font.BOLD)
                         }
