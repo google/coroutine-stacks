@@ -317,7 +317,8 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         }
     }
 
-    inner class LibraryFrameToggle(private val context: GraphBuildingContext
+    inner class LibraryFrameToggle(
+        private val context: GraphBuildingContext
     ) : PanelToggleableButton(
         AllIcons.General.Filter,
         message("show.library.frames"),
@@ -334,7 +335,8 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     ) : PanelToggleableButton(
         AllIcons.Debugger.Frame,
         message("add.creation.frames"),
-        message("remove.creation.frames")
+        message("remove.creation.frames"),
+        !addCreationFrames
     ) {
         override var condition by ::addCreationFrames
 
