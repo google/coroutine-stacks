@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks.test.utils
+package com.google.coroutinestacks.test.utils
 
 import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.*

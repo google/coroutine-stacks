@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks.test
+package com.google.coroutinestacks.test
 
-import com.nikitanazarov.coroutinestacks.test.utils.buildForest
+import com.google.coroutinestacks.test.utils.buildForest
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
-import com.nikitanazarov.coroutinestacks.test.utils.parseCoroutineDump
+import com.google.coroutinestacks.test.utils.parseCoroutineDump
 import java.io.File
 
 const val DUMP_DIR = "src/testData/dumps/"

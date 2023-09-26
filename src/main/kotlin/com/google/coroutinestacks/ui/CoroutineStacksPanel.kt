@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks.ui
+package com.google.coroutinestacks.ui
 
 import com.intellij.debugger.engine.DebugProcessListener
 import com.intellij.debugger.engine.JavaDebugProcess
@@ -38,9 +38,9 @@ import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.JBColor.GRAY
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.xdebugger.XDebuggerManager
-import com.nikitanazarov.coroutinestacks.CoroutineStacksBundle.message
-import com.nikitanazarov.coroutinestacks.Node
-import com.nikitanazarov.coroutinestacks.buildCoroutineStackForest
+import com.google.coroutinestacks.CoroutineStacksBundle.message
+import com.google.coroutinestacks.Node
+import com.google.coroutinestacks.buildCoroutineStackForest
 import org.jetbrains.kotlin.idea.debugger.coroutine.command.CoroutineDumpAction
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoCache
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks.ui
+package com.google.coroutinestacks.ui
 
 import java.awt.Component
 import java.awt.Container

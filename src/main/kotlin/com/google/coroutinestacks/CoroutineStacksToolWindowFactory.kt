@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks
+package com.google.coroutinestacks
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.nikitanazarov.coroutinestacks.ui.CoroutineStacksPanel
+import com.google.coroutinestacks.ui.CoroutineStacksPanel
 
 class CoroutineStacksToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {

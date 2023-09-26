@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks.ui
+package com.google.coroutinestacks.ui
 
 import com.intellij.ui.JBColor
 import java.awt.*

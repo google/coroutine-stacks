@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks
+package com.google.coroutinestacks
 
+import com.google.coroutinestacks.ui.*
 import com.intellij.debugger.engine.JVMStackFrameInfoProvider
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.ui.components.JBList
 import com.intellij.ui.util.preferredHeight
 import com.intellij.ui.util.preferredWidth
-import com.nikitanazarov.coroutinestacks.ui.*
 import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineStackFrameItem

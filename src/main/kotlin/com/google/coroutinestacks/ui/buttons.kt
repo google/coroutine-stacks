@@ -1,4 +1,4 @@
-package com.nikitanazarov.coroutinestacks.ui
+package com.google.coroutinestacks.ui
 
 import java.awt.event.*
 import javax.swing.Icon

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks.ui
+package com.google.coroutinestacks.ui
 
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.icons.AllIcons
@@ -26,8 +26,8 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import com.intellij.xdebugger.frame.XExecutionStack
 import com.intellij.xdebugger.frame.XStackFrame
-import com.nikitanazarov.coroutinestacks.CoroutineTrace
-import com.nikitanazarov.coroutinestacks.isLibraryFrame
+import com.google.coroutinestacks.CoroutineTrace
+import com.google.coroutinestacks.isLibraryFrame
 import org.jetbrains.kotlin.analysis.decompiler.stub.file.ClsClassFinder
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CreationCoroutineStackFrameItem
 import org.jetbrains.kotlin.idea.debugger.coroutine.view.SimpleColoredTextIconPresentationRenderer
@@ -174,11 +174,13 @@ class CoroutineFramesList(
         for (frame in trace.stackFrameItems) {
             if (frame == null) continue
             val renderedLocation = renderer.render(frame.location).simpleString()
-            data.add(Frame(
+            data.add(
+                Frame(
                 renderedLocation,
                 frame is CreationCoroutineStackFrameItem,
                 frame.isLibraryFrame(suspendContext)
-            ))
+            )
+            )
         }
 
         return data.toTypedArray()

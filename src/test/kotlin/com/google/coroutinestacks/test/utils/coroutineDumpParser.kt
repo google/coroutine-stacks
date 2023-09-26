@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks.test.utils
+package com.google.coroutinestacks.test.utils
 
-import com.nikitanazarov.coroutinestacks.CoroutineTrace
-import com.nikitanazarov.coroutinestacks.Node
-import com.nikitanazarov.coroutinestacks.buildStackFrameGraph
-import com.nikitanazarov.coroutinestacks.createCoroutineTraces
+import com.google.coroutinestacks.CoroutineTrace
+import com.google.coroutinestacks.Node
+import com.google.coroutinestacks.buildStackFrameGraph
+import com.google.coroutinestacks.createCoroutineTraces
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.DefaultCoroutineStackFrameItem
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.State

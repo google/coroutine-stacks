@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.nikitanazarov.coroutinestacks
+package com.google.coroutinestacks
 
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.Nls
