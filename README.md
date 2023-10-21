@@ -3,7 +3,8 @@
 
 This project was developed during Google Summer of Code 2023 and is dedicated to creating an Intellij Plugin that will enhance the coroutine debugging experience by creating a view with the graph representation of coroutines and their stack traces, similar to how it is done in the  [Parallel Stacks](https://www.jetbrains.com/help/rider/Debugging_Multithreaded_Applications.html#parallel-stacks) feature of the JetBrains Rider IDE.
 
-![coroutine-stacks-demo](https://github.com/googlestaging/coroutine-stacks/assets/25721619/ab28f46a-0a8b-496a-811d-7ead7be8b0f0)
+![coroutine-stacks-demo](https://github.com/google/coroutine-stacks/assets/25721619/7b8caf0c-ad82-476c-91b8-3cac105155cf)
+
 
 ## How to install the plugin
 The plugin is still going through the approval process before the release and will be released later. But you can still build and install it manually.
