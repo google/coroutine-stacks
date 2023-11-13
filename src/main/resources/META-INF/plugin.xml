@@ -21,15 +21,17 @@
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
-    <name>CoroutineStacks</name>
+    <name>Coroutine Stacks</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor email="nikitanazarov@google.com">Nikita Nazarov</vendor>
+    <vendor email="coroutine.stacks@gmail.com">Nikita Nazarov</vendor>
 
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
-    <description>This plugin adds a panel that will show kotlin coroutines and their stack traces as a graph during debugging</description>
+    <description>
+        The Coroutine Stacks plugin adds a panel that renders coroutine stack traces and their relations in a graph view.
+    </description>
 
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
