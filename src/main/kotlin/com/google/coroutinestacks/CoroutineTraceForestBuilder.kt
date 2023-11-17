@@ -20,14 +20,13 @@ import com.google.coroutinestacks.ui.*
 import com.intellij.debugger.engine.JVMStackFrameInfoProvider
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.ui.components.JBList
-import com.intellij.ui.util.preferredHeight
-import com.intellij.ui.util.preferredWidth
 import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineStackFrameItem
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.State
 import org.jetbrains.kotlin.idea.debugger.coroutine.util.CoroutineFrameBuilder
 import java.awt.Component
+import java.awt.Dimension
 import java.util.*
 
 data class Node(
@@ -86,7 +85,7 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
             previousListSelection = currentList
         }
         vertexData.add(vertex)
-        maxWidth += vertex.preferredWidth
+        maxWidth += vertex.preferredSize.width
         traceNotNullCount += 1
     }
 
@@ -96,12 +95,12 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
     val averagePreferredWidth = maxWidth / traceNotNullCount
 
     val firstVertex = vertexData.firstOrNull() ?: return null
-    val averagePreferredCellHeight = firstVertex.preferredHeight / firstVertex.model.size
+    val averagePreferredCellHeight = firstVertex.preferredSize.height / firstVertex.model.size
     val fontSize = firstVertex.font.size2D
 
     vertexData.forEach { vertex ->
         if (vertex != null) {
-            vertex.preferredWidth = averagePreferredWidth
+            vertex.preferredSize = Dimension(averagePreferredWidth, vertex.preferredSize.height)
             vertex.fixedCellHeight = averagePreferredCellHeight
             componentData.add(vertex)
             return@forEach

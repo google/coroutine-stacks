@@ -17,10 +17,9 @@
 package com.google.coroutinestacks.ui
 
 import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.util.preferredHeight
-import com.intellij.ui.util.preferredWidth
 import java.awt.Component
 import java.awt.Container
+import java.awt.Dimension
 
 class ZoomableJBScrollPane(
     view: Component,
@@ -56,8 +55,10 @@ class ZoomableJBScrollPane(
         }
 
         font = font.deriveFont(font.size2D + preferredFontSize * scaleFactor)
-        preferredWidth += (averagePreferredWidth * scaleFactor).toInt()
         fixedCellHeight += (averagePreferredCellHeight * scaleFactor).toInt()
-        preferredHeight = fixedCellHeight * model.size
+        preferredSize = Dimension(
+            preferredSize.width + (averagePreferredWidth * scaleFactor).toInt(),
+            fixedCellHeight * model.size
+        )
     }
 }
