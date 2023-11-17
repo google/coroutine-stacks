@@ -33,6 +33,11 @@
         The Coroutine Stacks plugin adds a panel that renders coroutine stack traces and their relations in a graph view.
     </description>
 
+    <idea-version since-build="222"/>
+    <incompatible-with>
+        com.intellij.modules.androidstudio
+    </incompatible-with>
+
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
