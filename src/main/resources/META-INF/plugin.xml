@@ -30,10 +30,15 @@
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description>
-        The Coroutine Stacks plugin adds a panel that renders coroutine stack traces and their relations in a graph view.
+        <![CDATA[
+             Adds a panel that renders coroutine stack traces and their relations in a graph view.
+             <br><br>
+             <a href="https://plugins.jetbrains.com/plugin/23117-coroutine-stacks/documentation/quick-start-guide">Quick Start Guide</a><br>
+             <a href="https://github.com/google/coroutine-stacks/issues">Issue tracker</a><br>
+        ]]>
     </description>
 
-    <idea-version since-build="222"/>
+    <idea-version since-build="222.3346"/>
     <incompatible-with>
         com.intellij.modules.androidstudio
     </incompatible-with>
