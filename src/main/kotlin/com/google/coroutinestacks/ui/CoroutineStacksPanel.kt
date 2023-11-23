@@ -147,7 +147,12 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         val coroutineInfoCache: CoroutineInfoCache
         try {
             coroutineInfoCache = CoroutineDebugProbesProxy(suspendContextImpl).dumpCoroutines()
-        } catch(e: Exception) {
+        } catch (e: Exception) {
+            emptyText.text = message("nothing.to.show")
+            return
+        }
+
+        if (coroutineInfoCache.cache.isEmpty()) {
             emptyText.text = message("nothing.to.show")
             return
         }
