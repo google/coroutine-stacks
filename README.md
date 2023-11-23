@@ -7,7 +7,7 @@ This project was developed during Google Summer of Code 2023 and is dedicated to
 
 
 ## How to install the plugin
-The plugin is still going through the approval process before the release and will be released later. But you can still build and install it manually.
+The plugin is published in [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/23117-coroutine-stacks/), so you can install it from the `Plugins` menu in the IDE.
 
 ## How to use the plugin
 Once you start the debugger click on the `Coroutine Stacks` label in the bottom right corner of the IDE. After that you will see a panel with coroutine stack traces. On the top of it you will find a couple of useful buttons:
@@ -17,4 +17,4 @@ Once you start the debugger click on the `Coroutine Stacks` label in the bottom 
 4. Select the dispatcher
 5. Zoom the panel in and out
 
-Check out this [blog post](https://medium.com/@raehatsinghnanda/parallel-stacks-for-kotlin-coroutines-in-the-debugger-d3099eb3a9c2) for the full feature breakdown.
+Check out the [Quick Start Guide](https://plugins.jetbrains.com/plugin/23117-coroutine-stacks/documentation/quick-start-guide) for the detailed description of the plugin features.
