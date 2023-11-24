@@ -10,7 +10,7 @@ This project was developed during Google Summer of Code 2023 and is dedicated to
 The plugin is published in [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/23117-coroutine-stacks/), so you can install it from the `Plugins` menu in the IDE.
 
 ## How to use the plugin
-Once you start the debugger click on the `Coroutine Stacks` label in the bottom right corner of the IDE. After that you will see a panel with coroutine stack traces. On the top of it you will find a couple of useful buttons:
+Once you start the debugger click on the `Coroutine Stacks` label in the bottom right corner of the IDE. If you use the new UI you should click on the icon with four circles froming a square. After that you will see a panel with coroutine stack traces. On the top of it you will find a couple of useful buttons:
 1. Add library frames filter
 2. Capture a coroutine dump
 3. Add coroutine creation stack traces to the panel
