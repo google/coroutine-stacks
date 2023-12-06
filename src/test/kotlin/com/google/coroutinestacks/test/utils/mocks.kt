@@ -20,11 +20,12 @@ import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.*
 
 class MockCoroutineInfoData(state: State) : CoroutineInfoData(
-    CoroutineDescriptor("", "", state, null)
+    CoroutineDescriptor("", "", state, null, "")
 ) {
     override val activeThread = null
     override val creationStackTrace: List<CreationCoroutineStackFrameItem> = emptyList()
     override val stackTrace: MutableList<CoroutineStackFrameItem> = mutableListOf()
+    override val jobHierarchy = emptyList<String>()
 }
 
 class MockLocation(val label: String) : Location {
