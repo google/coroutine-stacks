@@ -20,7 +20,6 @@ import com.intellij.debugger.engine.DebugProcessListener
 import com.intellij.debugger.engine.JavaDebugProcess
 import com.intellij.debugger.engine.SuspendContext
 import com.intellij.debugger.engine.SuspendContextImpl
-import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.engine.events.SuspendContextCommandImpl
 import com.intellij.debugger.impl.DebuggerManagerListener
 import com.intellij.debugger.impl.DebuggerSession
@@ -182,8 +181,8 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         suspendContextImpl: SuspendContextImpl
     ) {
         forest.replaceContentsWithLabel(buildingPanelLabel)
-        suspendContextImpl.debugProcess.managerThread.invoke(object : DebuggerCommandImpl() {
-            override fun action() {
+        suspendContextImpl.debugProcess.managerThread.schedule(object : SuspendContextCommandImpl(suspendContextImpl) {
+            override fun contextAction(suspendContext: SuspendContextImpl) {
                 val root = Node()
                 coroutineStackForest = suspendContextImpl.buildCoroutineStackForest(
                     root,
@@ -206,6 +205,9 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
                     updateUI()
                 }
             }
+
+            override fun getPriority() =
+                PrioritizedTask.Priority.NORMAL
         })
     }
 
@@ -256,6 +258,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     inner class CaptureDumpButton(
         private val context: GraphBuildingContext
     ) : PanelButton(AllIcons.Actions.Dump,  message("get.coroutine.dump")) {
+        @Suppress("DEPRECATION")
         override fun action() {
             val suspendContext = context.suspendContext
             val process = suspendContext.debugProcess
