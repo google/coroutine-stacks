@@ -21,25 +21,25 @@ import java.awt.*
 import java.awt.event.*
 import java.awt.geom.Path2D
 import javax.swing.JViewport
+import kotlin.collections.*
 
-class DraggableContainerWithEdges : Container(), MouseMotionListener, MouseListener {
+class DraggableContainerWithEdges(components: List<Component>, graph: DAG) : Container() {
     companion object {
         const val BEZIER_CURVE_CONTROL_POINT_OFFSET = 20
         const val EDGE_WIDTH = 1.0F
     }
 
-    private var holdPointOnView: Point? = null
-
     init {
-        addMouseMotionListener(this)
-        addMouseListener(this)
+        layout = ForestLayout(graph)
+        components.forEach { component -> add(component) }
+        graph.registerComponentSizeCalculator { index -> getComponent(index).preferredSize }
     }
 
     override fun paint(g: Graphics) {
         super.paint(g)
         val g2d = g as? Graphics2D ?: return
 
-        dfs(object : ComponentVisitor {
+        dfs(object : Visitor {
             override fun visitComponent(parentIndex: Int, index: Int) {
                 if (parentIndex < 0) return
                 val comp = getComponent(index)
@@ -66,53 +66,4 @@ class DraggableContainerWithEdges : Container(), MouseMotionListener, MouseListe
         )
         return path
     }
-
-    override fun mouseDragged(e: MouseEvent) {
-        val viewport = parent as? JViewport ?: return
-        val holdPointOnView = holdPointOnView ?: return
-        val dragEventPoint = e.point
-        val viewPos = viewport.viewPosition
-        val maxViewPosX = width - viewport.width
-        val maxViewPosY = height - viewport.height
-        if (maxViewPosX > 0) {
-            viewPos.x -= dragEventPoint.x - holdPointOnView.x
-            if (viewPos.x < 0) {
-                viewPos.x = 0
-                holdPointOnView.x = dragEventPoint.x
-            }
-            if (viewPos.x > maxViewPosX) {
-                viewPos.x = maxViewPosX
-                holdPointOnView.x = dragEventPoint.x
-            }
-        }
-
-        if (maxViewPosY > 0) {
-            viewPos.y -= dragEventPoint.y - holdPointOnView.y
-            if (viewPos.y < 0) {
-                viewPos.y = 0
-                holdPointOnView.y = dragEventPoint.y
-            }
-            if (viewPos.y > maxViewPosY) {
-                viewPos.y = maxViewPosY
-                holdPointOnView.y = dragEventPoint.y
-            }
-        }
-
-        viewport.viewPosition = viewPos
-    }
-
-    override fun mousePressed(e: MouseEvent?) {
-        e ?: return
-        cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
-        holdPointOnView = e.point
-    }
-
-    override fun mouseReleased(e: MouseEvent?) {
-        setCursor(null)
-    }
-
-    override fun mouseMoved(e: MouseEvent?) {}
-    override fun mouseClicked(e: MouseEvent?) {}
-    override fun mouseEntered(e: MouseEvent?) {}
-    override fun mouseExited(e: MouseEvent?) {}
 }

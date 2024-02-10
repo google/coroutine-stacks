@@ -108,9 +108,7 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
         componentData.add(Separator())
     }
 
-    val forest = DraggableContainerWithEdges()
-    componentData.forEach { forest.add(it) }
-    forest.layout = ForestLayout()
+    val forest = DraggableContainerWithEdges(componentData, DAG(0, mutableListOf()))
 
     return ZoomableJBScrollPane(
         forest,

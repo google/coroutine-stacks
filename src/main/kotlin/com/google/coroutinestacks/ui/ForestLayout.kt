@@ -19,10 +19,15 @@ package com.google.coroutinestacks.ui
 import java.awt.Component
 import java.awt.Container
 import java.awt.Dimension
+import java.lang.Integer.max
 import java.util.*
 import javax.swing.ScrollPaneLayout
 
-class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 50) : ScrollPaneLayout() {
+class ForestLayout(
+    private val graph: DAG,
+    private val xPadding: Int = 50,
+    private val yPadding: Int = 50,
+) : ScrollPaneLayout() {
     override fun addLayoutComponent(name: String?, comp: Component?) {
     }
 
@@ -30,10 +35,24 @@ class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 5
     }
 
     override fun preferredLayoutSize(parent: Container): Dimension {
+        var preferredHeight = 0
+        var preferredWidth = 0
+        var baseComponentCount = 0
+        graph.maxHeightComponentInLevel.forEach { preferredHeight += it }
+        preferredHeight += (yPadding * (graph.numberOfLevels + 1))
+
+        graph.levelOrderTraversal(object : ComponentVisitor {
+            override fun visitBaseComponent(index: Int, level: Int) {
+                preferredWidth += parent.getComponentSize(index).width
+                baseComponentCount++
+            }
+        })
+        preferredWidth += (xPadding * (baseComponentCount + 1))
+
         var maxY = 0
         var width = xPadding
         var currentHeight = yPadding
-        parent.dfs(object : ComponentVisitor {
+        parent.dfs(object : Visitor {
             override fun visitComponent(parentIndex: Int, index: Int) {
                 val compSize = parent.getComponentSize(index)
                 val nextComponent = if (index + 1 < parent.componentCount) parent.getComponent(index + 1) else null
@@ -53,7 +72,7 @@ class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 5
         })
 
         val insets = parent.insets
-        return Dimension(width + insets.left + insets.right, maxY + insets.top + insets.bottom)
+        return Dimension(preferredWidth + insets.left + insets.right, preferredHeight + insets.top + insets.bottom)
     }
 
     override fun minimumLayoutSize(parent: Container): Dimension = parent.preferredSize
@@ -64,13 +83,76 @@ class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 5
             return
         }
 
-        val widthToDrawSubtree = Array(size) { -xPadding }
         val ys = Array(size) { 0 }
         val xs = Array(size) { 0 }
+        val positionY = Array(size) { 0 }
+        val positionX = Array(size) { 0 }
+
         val childrenIndices = Array(size) { mutableListOf<Int>() }
         val parentSize = parent.size
         var currentHeight = parentSize.height - yPadding
-        parent.dfs(object : ComponentVisitor {
+
+        graph.indicesByLevel.forEach { (level, indices) ->
+            indices.forEach { index ->
+                positionY[index] = currentHeight - graph.maxHeightComponentInLevel[level]
+            }
+            currentHeight -= yPadding + graph.maxHeightComponentInLevel[level]
+        }
+
+        currentHeight = parentSize.height - yPadding
+        var mostRight = 0
+        var previousLevel = -1
+        var baseComponentCountInLevel = 0
+        var baseLevel = -1
+        var baseLevelFound = false
+        val baseComponentIndices : MutableSet<Int> = mutableSetOf()
+
+        graph.levelOrderTraversal(object : ComponentVisitor {
+            override fun visitBaseComponent(index: Int, level: Int) {
+                if (level > previousLevel) baseComponentCountInLevel = 0
+                baseComponentIndices.add(index)
+                previousLevel = level
+                baseComponentCountInLevel++
+                if (!baseLevelFound && baseComponentCountInLevel == graph.indicesByLevel[level]?.size) {
+                    baseLevel = level
+                    baseLevelFound = true
+                }
+            }
+        })
+
+        graph.dfs(object : ComponentVisitor {
+            override fun visitLeavingComponent(index: Int) {
+                if (baseComponentIndices.contains(index)) {
+                    mostRight += xPadding + parent.getComponentSize(index).width
+                    positionX[index] = mostRight
+                }
+            }
+        })
+
+        for (i in baseLevel - 1 downTo   0) {
+            graph.indicesByLevel[i]?.forEach { index ->
+                if (positionX[index] == 0) {
+                    graph.getChildren(index).forEach { child ->
+                        positionX[index] += positionX[child - 1]
+                    }
+                    positionX[index] /= graph.numberOfChildren(index)
+                }
+            }
+        }
+
+        for (i in baseLevel + 1 until graph.numberOfLevels) {
+            graph.indicesByLevel[i]?.forEach { index ->
+                if (positionX[index] == 0) {
+                    graph.getParents(index).forEach { parent ->
+                        positionX[index] += positionX[parent - 1]
+                    }
+                    positionX[index] /= graph.numberOfParents(index)
+                }
+            }
+        }
+        println("")
+
+        parent.dfs(object : Visitor {
             override fun visitComponent(parentIndex: Int, index: Int) {
                 if (parentIndex != -1) {
                     childrenIndices[parentIndex].add(index)
@@ -84,19 +166,11 @@ class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 5
             override fun leaveComponent(parentIndex: Int, index: Int) {
                 val compSize = parent.getComponentSize(index)
                 currentHeight += yPadding + compSize.height
-                if (widthToDrawSubtree[index] <= 0) {
-                    widthToDrawSubtree[index] = compSize.width + xPadding
-                }
-
-                if (parentIndex < 0) {
-                    return
-                }
-                widthToDrawSubtree[parentIndex] += widthToDrawSubtree[index] + xPadding
             }
         })
 
         var mostRightX = 0
-        parent.dfs(object : ComponentVisitor {
+        parent.dfs(object : Visitor {
             override fun leaveComponent(parentIndex: Int, index: Int) {
                 val numChildren = childrenIndices[index].size
                 if (numChildren == 0) {
@@ -120,7 +194,7 @@ class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 5
             }
 
             val compSize = comp.preferredSize
-            comp.setBounds(xs[i], ys[i], compSize.width, compSize.height)
+            comp.setBounds(positionX[i], positionY[i], compSize.width, compSize.height)
         }
     }
 
@@ -130,16 +204,7 @@ class ForestLayout(private val xPadding: Int = 50, private val yPadding: Int = 5
 
 class Separator : Component()
 
-// A visitor to provide dfs component processing
-internal interface ComponentVisitor {
-    fun visitComponent(parentIndex: Int, index: Int) {
-    }
-
-    fun leaveComponent(parentIndex: Int, index: Int) {
-    }
-}
-
-internal fun Container.dfs(visitor: ComponentVisitor) {
+internal fun Container.dfs(visitor: Visitor) {
     if (componentCount == 0) {
         return
     }
