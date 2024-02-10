@@ -5,10 +5,10 @@ import java.lang.Integer.max
 import java.util.*
 
 class DAG (
-    private var numberOfNodes: Int,
-    private val children: List<List<Int>>
+    var numberOfNodes: Int,
+    val children: Map<Int, List<Int>>
 ) {
-    private var parents : List<List<Int>> = emptyList()
+    private var parents : Map<Int, List<Int>> = emptyMap()
         get() = field.ifEmpty { generateParentList(numberOfNodes, children) }
     private var inDegrees : List<Int> = emptyList()
         get() = field.ifEmpty { calculateInDegrees() }
@@ -45,7 +45,7 @@ class DAG (
     private fun calculateInDegrees(): List<Int> {
         val inDegrees = MutableList(numberOfNodes) { 0 }
 
-        for (childList in children) {
+        children.forEach { (_, childList) ->
             for (child in childList) {
                 inDegrees[child]++
             }
@@ -103,9 +103,9 @@ class DAG (
         while (stack.isNotEmpty()) {
             var visitingNode = stack.peek()
 
-            while (visitingNode < children.size && childrenToVisit[visitingNode] < children[visitingNode].size) {
+            while (children.containsKey(visitingNode) && childrenToVisit[visitingNode] < (children[visitingNode]?.size ?: return)) {
                 val childIndex = childrenToVisit[visitingNode]
-                val child = children[visitingNode][childIndex]
+                val child = children[visitingNode]?.get(childIndex) ?: continue
                 if (visited[child]) break
                 childrenToVisit[visitingNode]++
                 stack.push(child)
@@ -118,12 +118,12 @@ class DAG (
         }
     }
 
-    private fun generateParentList(numberOfNodes: Int, children: List<List<Int>>): List<List<Int>> {
-        val parents = MutableList(numberOfNodes) { mutableListOf<Int>() }
+    private fun generateParentList(numberOfNodes: Int, children: Map<Int, List<Int>>): Map<Int, List<Int>> {
+        val parents : MutableMap<Int, MutableList<Int>> = mutableMapOf()
 
-        children.forEachIndexed() { parentIndex, childList ->
+        children.forEach() { (parentIndex, childList) ->
             for (child in childList) {
-                parents[child].add(parentIndex)
+                parents[child]?.add(parentIndex)
             }
         }
         return parents

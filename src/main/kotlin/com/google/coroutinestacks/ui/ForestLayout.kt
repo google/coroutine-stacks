@@ -36,18 +36,15 @@ class ForestLayout(
 
     override fun preferredLayoutSize(parent: Container): Dimension {
         var preferredHeight = 0
-        var preferredWidth = 0
-        var baseComponentCount = 0
+        var preferredWidth = xPadding
         graph.maxHeightComponentInLevel.forEach { preferredHeight += it }
         preferredHeight += (yPadding * (graph.numberOfLevels + 1))
 
         graph.levelOrderTraversal(object : ComponentVisitor {
             override fun visitBaseComponent(index: Int, level: Int) {
-                preferredWidth += parent.getComponentSize(index).width
-                baseComponentCount++
+                preferredWidth += parent.getComponentSize(index).width + xPadding
             }
         })
-        preferredWidth += (xPadding * (baseComponentCount + 1))
 
         var maxY = 0
         var width = xPadding
@@ -94,13 +91,13 @@ class ForestLayout(
 
         graph.indicesByLevel.forEach { (level, indices) ->
             indices.forEach { index ->
-                positionY[index] = currentHeight - graph.maxHeightComponentInLevel[level]
+                positionY[index] = currentHeight - parent.getComponentSize(index).height
             }
             currentHeight -= yPadding + graph.maxHeightComponentInLevel[level]
         }
 
         currentHeight = parentSize.height - yPadding
-        var mostRight = 0
+        var mostRight = xPadding
         var previousLevel = -1
         var baseComponentCountInLevel = 0
         var baseLevel = -1
@@ -123,8 +120,8 @@ class ForestLayout(
         graph.dfs(object : ComponentVisitor {
             override fun visitLeavingComponent(index: Int) {
                 if (baseComponentIndices.contains(index)) {
-                    mostRight += xPadding + parent.getComponentSize(index).width
                     positionX[index] = mostRight
+                    mostRight += xPadding + parent.getComponentSize(index).width
                 }
             }
         })
@@ -135,7 +132,7 @@ class ForestLayout(
                     graph.getChildren(index).forEach { child ->
                         positionX[index] += positionX[child - 1]
                     }
-                    positionX[index] /= graph.numberOfChildren(index)
+                    positionX[index] /= graph.numberOfChildren(index).coerceAtLeast(1)
                 }
             }
         }
@@ -146,7 +143,7 @@ class ForestLayout(
                     graph.getParents(index).forEach { parent ->
                         positionX[index] += positionX[parent - 1]
                     }
-                    positionX[index] /= graph.numberOfParents(index)
+                    positionX[index] /= graph.numberOfParents(index).coerceAtLeast(1)
                 }
             }
         }

@@ -53,12 +53,13 @@ fun SuspendContextImpl.buildCoroutineStackForest(
     zoomLevel: Float
 ): ZoomableJBScrollPane? {
     buildStackFrameGraph(rootValue, coroutineDataList, areLibraryFramesAllowed, addCreationFrames)
-    val coroutineTraces = createCoroutineTraces(rootValue)
-    return createCoroutineTraceForest(coroutineTraces, zoomLevel)
+    val (coroutineTraces, children) = createCoroutineTraces(rootValue)
+    return createCoroutineTraceForest(coroutineTraces, children, zoomLevel)
 }
 
 private fun SuspendContextImpl.createCoroutineTraceForest(
     traces: List<CoroutineTrace?>,
+    children: MutableMap<Int, MutableList<Int>>,
     zoomLevel: Float
 ): ZoomableJBScrollPane? {
     if (traces.isEmpty()) {
@@ -108,7 +109,7 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
         componentData.add(Separator())
     }
 
-    val forest = DraggableContainerWithEdges(componentData, DAG(0, mutableListOf()))
+    val forest = DraggableContainerWithEdges(componentData, DAG(traces.size, children))
 
     return ZoomableJBScrollPane(
         forest,
@@ -119,8 +120,11 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
     )
 }
 
-fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
+fun createCoroutineTraces(rootValue: Node): Pair<MutableList<CoroutineTrace?>, MutableMap<Int, MutableList<Int>>> {
     val stack = Stack<Pair<Node, Int>>().apply { push(rootValue to 0) }
+    val children : MutableMap<Int, MutableList<Int>> = mutableMapOf()
+    val parents : MutableMap<Int, Int> = mutableMapOf()
+    var visitingNode = 0
     val parentStack = Stack<Node>()
     var previousLevel: Int? = null
     val coroutineTraces = mutableListOf<CoroutineTrace?>()
@@ -137,9 +141,12 @@ fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
                 currentNode.coroutinesActive
             )
             repeat((previousLevel ?: 0) - currentLevel + 1) {
-                coroutineTraces.add(null)
+                visitingNode = parents[visitingNode] ?: return@repeat
             }
             coroutineTraces.add(currentTrace)
+            children.getOrPut(visitingNode) { mutableListOf() }.add(coroutineTraces.size)
+            parents[coroutineTraces.size] = visitingNode
+            visitingNode = coroutineTraces.size
             previousLevel = currentLevel
         } else if (parent != null) {
             coroutineTraces.lastOrNull()?.stackFrameItems?.add(0, currentNode.stackFrameItem)
@@ -156,7 +163,7 @@ fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
         }
     }
 
-    return coroutineTraces
+    return coroutineTraces to children
 }
 
 private fun SuspendContextImpl.buildStackFrameGraph(
