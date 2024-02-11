@@ -4,79 +4,72 @@ import java.awt.Dimension
 import java.lang.Integer.max
 import java.util.*
 
-class DAG (
+class DAG(
     var numberOfNodes: Int,
-    val children: Map<Int, List<Int>>
+    var children: Map<Int, List<Int>>
 ) {
-    private var parents : Map<Int, List<Int>> = emptyMap()
-        get() = field.ifEmpty { generateParentList(numberOfNodes, children) }
-    private var inDegrees : List<Int> = emptyList()
-        get() = field.ifEmpty { calculateInDegrees() }
-    var numberOfLevels : Int = -1
-    var indicesByLevel : MutableMap<Int, MutableList<Int>> = mutableMapOf()
-    var componentSize : ((Int) -> Dimension)? = null
-    var maxHeightComponentInLevel : MutableList<Int> = mutableListOf()
+    private val parents: Map<Int, List<Int>> by lazy { generateParentList() }
+    private val inDegrees: MutableList<Int> by lazy { calculateInDegrees() }
+    val indicesByLevel = mutableMapOf<Int, MutableList<Int>>()
+    var numberOfLevels = -1
+    val maxHeightComponentInLevel = mutableListOf<Int>()
+    var componentSize: ((Int) -> Dimension)? = null
 
     init {
         numberOfNodes++
     }
 
-    fun registerComponentSizeCalculator(componentSize : (Int) -> Dimension) {
+    fun registerComponentSizeCalculator(componentSize: (Int) -> Dimension) {
         this.componentSize = componentSize
         calculateHeightAndLevelCount()
     }
 
     private fun calculateHeightAndLevelCount() {
-        if (componentSize == null) return
+        componentSize ?: return
         levelOrderTraversal(object : ComponentVisitor {
             override fun visitComponentByLevel(index: Int, level: Int) {
-                val heightVisitedComponent = componentSize?.invoke(index)?.height ?: return
-                indicesByLevel.getOrPut(level) { mutableListOf() }.add(index)
-                if (level >= maxHeightComponentInLevel.size)
-                    maxHeightComponentInLevel.add(heightVisitedComponent)
-                else
-                    maxHeightComponentInLevel[level] = max(maxHeightComponentInLevel[level], heightVisitedComponent)
-                numberOfLevels = level
+                componentSize?.invoke(index)?.height?.let { height ->
+                    indicesByLevel.getOrPut(level) { mutableListOf() }.add(index)
+                    if (level >= maxHeightComponentInLevel.size)
+                        maxHeightComponentInLevel.add(height)
+                    else
+                        maxHeightComponentInLevel[level] = max(maxHeightComponentInLevel[level], height)
+                    numberOfLevels = level
+                }
             }
         })
-        numberOfLevels ++
+        numberOfLevels++
     }
 
-    private fun calculateInDegrees(): List<Int> {
+    private fun calculateInDegrees(): MutableList<Int> {
         val inDegrees = MutableList(numberOfNodes) { 0 }
-
-        children.forEach { (_, childList) ->
-            for (child in childList) {
-                inDegrees[child]++
-            }
+        children.values.flatten().forEach { child ->
+            inDegrees[child]++
         }
         return inDegrees
     }
 
     fun levelOrderTraversal(visitor: ComponentVisitor) {
         val longestPaths = IntArray(numberOfNodes) { Int.MIN_VALUE }
-
-        val queue: Queue<Int> = LinkedList()
-        for (i in 0 until numberOfNodes) {
-            if (inDegrees[i] == 0) {
-                queue.add(i)
-                longestPaths[i] = 0
+        val queue: Queue<Int> = LinkedList<Int>().apply {
+            (0 until numberOfNodes).filter { inDegrees[it] == 0 }.forEach {
+                add(it)
+                longestPaths[it] = 0
             }
         }
-
-        val inDegreesAfterTraversal : MutableList<Int> = mutableListOf()
-        inDegrees.forEach { inDegreesAfterTraversal.add(it) }
+        val inDegreesAfterTraversal = inDegrees.toMutableList()
 
         while (queue.isNotEmpty()) {
             val node = queue.poll()
-            if (node > 0)
+            if (node > 0) {
                 visitor.visitComponentByLevel(node - 1, longestPaths[node] - 1)
-            val currentNodeChildren = children.getOrElse(node) { emptyList() }
+            }
+            val currentNodeChildren = children[node] ?: emptyList()
             var isBaseComponent = currentNodeChildren.isEmpty()
 
-            for (child in currentNodeChildren) {
-                longestPaths[child] = max(longestPaths[child], longestPaths[node] + 1)
-                inDegreesAfterTraversal[child] = inDegreesAfterTraversal[child] - 1
+            currentNodeChildren.forEach { child ->
+                longestPaths[child] = maxOf(longestPaths[child], longestPaths[node] + 1)
+                inDegreesAfterTraversal[child]--
                 if (inDegreesAfterTraversal[child] == 0) {
                     queue.add(child)
                 }
@@ -92,12 +85,9 @@ class DAG (
     }
 
     fun dfs(visitor: ComponentVisitor) {
-        val stack : Stack<Int> = Stack()
-        val childrenToVisit : MutableList<Int> = mutableListOf()
+        val stack = Stack<Int>()
+        val childrenToVisit = MutableList(numberOfNodes) { 0 }
         val visited = BooleanArray(numberOfNodes) { false }
-        for (i in 0 until numberOfNodes) {
-            childrenToVisit.add(0)
-        }
         stack.push(0)
 
         while (stack.isNotEmpty()) {
@@ -105,7 +95,7 @@ class DAG (
 
             while (children.containsKey(visitingNode) && childrenToVisit[visitingNode] < (children[visitingNode]?.size ?: return)) {
                 val childIndex = childrenToVisit[visitingNode]
-                val child = children[visitingNode]?.get(childIndex) ?: continue
+                val child = children[visitingNode]?.getOrNull(childIndex) ?: continue
                 if (visited[child]) break
                 childrenToVisit[visitingNode]++
                 stack.push(child)
@@ -113,38 +103,29 @@ class DAG (
             }
 
             val leavingNode = stack.pop()
-            visited[visitingNode] = true
+            visited[leavingNode] = true
             visitor.visitLeavingComponent(leavingNode - 1)
         }
     }
 
-    private fun generateParentList(numberOfNodes: Int, children: Map<Int, List<Int>>): Map<Int, List<Int>> {
-        val parents : MutableMap<Int, MutableList<Int>> = mutableMapOf()
-
-        children.forEach() { (parentIndex, childList) ->
-            for (child in childList) {
-                parents[child]?.add(parentIndex)
+    private fun generateParentList(): Map<Int, List<Int>> {
+        val parents = mutableMapOf<Int, MutableList<Int>>()
+        children.forEach { (parentIndex, childList) ->
+            childList.forEach { child ->
+                parents.getOrPut(child) { mutableListOf() }.add(parentIndex)
             }
         }
         return parents
     }
 
-    fun getChildren(index: Int) = children.getOrElse(index + 1) { emptyList() }
-    fun getParents(index: Int) = parents.getOrElse(index + 1) { emptyList() }
-    fun numberOfChildren(index: Int) = children.getOrElse(index + 1) { emptyList() }.size
-    fun numberOfParents(index: Int) = parents.getOrElse(index + 1) { emptyList() }.size
+    fun getChildren(index: Int) = children[index + 1] ?: emptyList()
+    fun getParents(index: Int) = parents[index + 1] ?: emptyList()
+    fun numberOfChildren(index: Int) = getChildren(index).size
+    fun numberOfParents(index: Int) = getParents(index).size
 }
 
 interface ComponentVisitor {
     fun visitComponentByLevel(index: Int, level: Int) {}
     fun visitBaseComponent(index: Int, level: Int) {}
     fun visitLeavingComponent(index: Int) {}
-}
-
-interface Visitor {
-    fun visitComponent(parentIndex: Int, index: Int) {
-    }
-
-    fun leaveComponent(parentIndex: Int, index: Int) {
-    }
 }
