@@ -16,13 +16,24 @@
 
 package com.google.coroutinestacks
 
+import com.google.coroutinestacks.ui.*
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.google.coroutinestacks.ui.CoroutineStacksPanel
+import com.intellij.ui.content.ContentFactory
+import javax.swing.JComponent
+import com.google.coroutinestacks.CoroutineStacksBundle.message
 
 class CoroutineStacksToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        toolWindow.component.add(CoroutineStacksPanel(project))
+        toolWindow.createNewTab(
+            component = AllCoroutineStacksPanel(project),
+            displayName = message("all.coroutines")
+        )
     }
+}
+private fun ToolWindow.createNewTab(component: JComponent, displayName: String) {
+    val content = ContentFactory.getInstance().createContent(component, displayName, true)
+    contentManager.addContent(content)
+    contentManager.setSelectedContent(content)
 }

@@ -48,7 +48,7 @@ import org.jetbrains.kotlin.idea.debugger.coroutine.proxy.CoroutineDebugProbesPr
 import java.awt.Dimension
 import javax.swing.*
 
-class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText() {
+class AllCoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText() {
     companion object {
         val dispatcherSelectionMenuSize = Dimension(200, 25)
         const val MAXIMUM_ZOOM_LEVEL = 1f

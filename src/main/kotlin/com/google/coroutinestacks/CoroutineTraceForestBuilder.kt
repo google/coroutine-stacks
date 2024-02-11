@@ -53,29 +53,24 @@ fun SuspendContextImpl.buildCoroutineStackForest(
     zoomLevel: Float
 ): ZoomableJBScrollPane? {
     buildStackFrameGraph(rootValue, coroutineDataList, areLibraryFramesAllowed, addCreationFrames)
-    val coroutineTraces = createCoroutineTraces(rootValue)
-    return createCoroutineTraceForest(coroutineTraces, zoomLevel)
+    val (coroutineTraces, children) = createCoroutineTraces(rootValue)
+    return createCoroutineTraceForest(coroutineTraces, children, zoomLevel)
 }
 
 private fun SuspendContextImpl.createCoroutineTraceForest(
-    traces: List<CoroutineTrace?>,
+    traces: List<CoroutineTrace>,
+    children: MutableMap<Int, MutableList<Int>>,
     zoomLevel: Float
 ): ZoomableJBScrollPane? {
     if (traces.isEmpty()) {
         return null
     }
-    val vertexData = mutableListOf<JBList<*>?>()
+    val vertexData = mutableListOf<JBList<*>>()
     val componentData = mutableListOf<Component>()
     var previousListSelection: JBList<*>? = null
     var maxWidth = 0
-    var traceNotNullCount = 0
 
     traces.forEach { trace ->
-        if (trace == null) {
-            vertexData.add(null)
-            return@forEach
-        }
-
         val vertex = CoroutineFramesList(this, trace)
         vertex.addListSelectionListener { e ->
             val currentList = e.source as? JBList<*> ?: return@addListSelectionListener
@@ -86,31 +81,21 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
         }
         vertexData.add(vertex)
         maxWidth += vertex.preferredSize.width
-        traceNotNullCount += 1
     }
 
-    if (traceNotNullCount == 0) {
-        return null
-    }
-    val averagePreferredWidth = maxWidth / traceNotNullCount
+    val averagePreferredWidth = maxWidth / traces.size
 
     val firstVertex = vertexData.firstOrNull() ?: return null
     val averagePreferredCellHeight = firstVertex.preferredSize.height / firstVertex.model.size
     val fontSize = firstVertex.font.size2D
 
     vertexData.forEach { vertex ->
-        if (vertex != null) {
-            vertex.preferredSize = Dimension(averagePreferredWidth, vertex.preferredSize.height)
-            vertex.fixedCellHeight = averagePreferredCellHeight
-            componentData.add(vertex)
-            return@forEach
-        }
-        componentData.add(Separator())
+        vertex.preferredSize = Dimension(averagePreferredWidth, vertex.preferredSize.height)
+        vertex.fixedCellHeight = averagePreferredCellHeight
+        componentData.add(vertex)
     }
 
-    val forest = DraggableContainerWithEdges()
-    componentData.forEach { forest.add(it) }
-    forest.layout = ForestLayout()
+    val forest = DraggableContainerWithEdges(componentData, DAG(traces.size, children))
 
     return ZoomableJBScrollPane(
         forest,
@@ -121,11 +106,14 @@ private fun SuspendContextImpl.createCoroutineTraceForest(
     )
 }
 
-fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
+fun createCoroutineTraces(rootValue: Node): Pair<MutableList<CoroutineTrace>, MutableMap<Int, MutableList<Int>>> {
     val stack = Stack<Pair<Node, Int>>().apply { push(rootValue to 0) }
+    val children : MutableMap<Int, MutableList<Int>> = mutableMapOf()
+    val parents : MutableMap<Int, Int> = mutableMapOf()
+    var visitingNode = 0
     val parentStack = Stack<Node>()
     var previousLevel: Int? = null
-    val coroutineTraces = mutableListOf<CoroutineTrace?>()
+    val coroutineTraces = mutableListOf<CoroutineTrace>()
 
     while (stack.isNotEmpty()) {
         val (currentNode, currentLevel) = stack.pop()
@@ -139,9 +127,12 @@ fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
                 currentNode.coroutinesActive
             )
             repeat((previousLevel ?: 0) - currentLevel + 1) {
-                coroutineTraces.add(null)
+                visitingNode = parents[visitingNode] ?: return@repeat
             }
             coroutineTraces.add(currentTrace)
+            children.getOrPut(visitingNode) { mutableListOf() }.add(coroutineTraces.size)
+            parents[coroutineTraces.size] = visitingNode
+            visitingNode = coroutineTraces.size
             previousLevel = currentLevel
         } else if (parent != null) {
             coroutineTraces.lastOrNull()?.stackFrameItems?.add(0, currentNode.stackFrameItem)
@@ -158,7 +149,7 @@ fun createCoroutineTraces(rootValue: Node): List<CoroutineTrace?> {
         }
     }
 
-    return coroutineTraces
+    return coroutineTraces to children
 }
 
 private fun SuspendContextImpl.buildStackFrameGraph(
