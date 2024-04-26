@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.google"
-version = "1.0.1"
+version = "1.0.2"
 
 repositories {
     mavenCentral()
@@ -32,7 +32,7 @@ tasks {
 
     patchPluginXml {
         sinceBuild.set("222.3346")
-        untilBuild.set("233.*")
+        untilBuild.set("253.*")
     }
 
     signPlugin {
