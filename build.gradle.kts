@@ -1,7 +1,9 @@
+import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
+
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "1.8.21"
-    id("org.jetbrains.intellij") version "1.13.3"
+    id("org.jetbrains.intellij.platform") version "2.1.0"
 }
 
 group = "com.google"
@@ -9,15 +11,10 @@ version = "1.0.2"
 
 repositories {
     mavenCentral()
-}
 
-// Configure Gradle IntelliJ Plugin
-// Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
-intellij {
-    version.set("2023.3")
-    type.set("IC") // Target IDE Platform
-
-    plugins.set(listOf("org.jetbrains.kotlin"))
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
 
 tasks {
@@ -48,14 +45,32 @@ tasks {
 
 tasks.named<Test>("test") {
     useJUnitPlatform()
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf("-Didea.kotlin.plugin.use.k2=true")
+    }
+}
+
+tasks.named<RunIdeTask>("runIde") {
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf("-Didea.kotlin.plugin.use.k2=true")
+    }
 }
 
 dependencies {
+    intellijPlatform {
+        intellijIdeaCommunity("2024.2.3")
+        bundledPlugin("org.jetbrains.kotlin")
+        bundledPlugin("com.intellij.java")
+
+        pluginVerifier()
+        zipSigner()
+        instrumentationTools()
+    }
     implementation(kotlin("stdlib-jdk8"))
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.1")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.0.3")
 }
 
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(17)
 }

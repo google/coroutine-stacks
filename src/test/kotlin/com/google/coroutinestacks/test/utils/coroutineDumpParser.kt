@@ -34,7 +34,7 @@ fun buildForest(info: List<CoroutineInfoData>): String {
         root,
         info,
         isFrameAllowed = { true },
-        buildCoroutineFrames = { it.stackTrace }
+        buildCoroutineFrames = { it.continuationStackFrames }
     )
     val traces = createCoroutineTraces(root)
     return buildForestFromTraces(traces)
@@ -56,13 +56,13 @@ fun parseCoroutineDump(fileName: String): List<CoroutineInfoData> {
                 } ?: continue
                 currentInfo = MockCoroutineInfoData(state)
             } else if (trimmedLine.isNotEmpty()) {
-                currentInfo?.stackTrace?.add(
+                currentInfo?.continuationStackFrames?.add(
                     DefaultCoroutineStackFrameItem(MockLocation(trimmedLine), emptyList())
                 )
             }
         }
         currentInfo?.let { result.add(it) }
-    } catch (ignored: IOException) {
+    } catch (_: IOException) {
     }
 
     return result

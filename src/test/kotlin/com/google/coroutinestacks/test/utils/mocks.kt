@@ -23,8 +23,8 @@ class MockCoroutineInfoData(state: State) : CoroutineInfoData(
     CoroutineDescriptor("", "", state, null, "")
 ) {
     override val activeThread = null
-    override val creationStackTrace: List<CreationCoroutineStackFrameItem> = emptyList()
-    override val stackTrace: MutableList<CoroutineStackFrameItem> = mutableListOf()
+    override val creationStackFrames: List<CreationCoroutineStackFrameItem> = emptyList()
+    override val continuationStackFrames: MutableList<CoroutineStackFrameItem> = mutableListOf()
     override val jobHierarchy = emptyList<String>()
 }
 

@@ -181,7 +181,7 @@ private fun SuspendContextImpl.buildStackFrameGraph(
             } else {
                 frameList.frames
             }
-        } catch (e : Exception) {
+        } catch (_ : Exception) {
             emptyList()
         }
     }
