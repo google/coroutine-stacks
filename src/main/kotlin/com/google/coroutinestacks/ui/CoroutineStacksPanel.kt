@@ -40,6 +40,9 @@ import com.intellij.xdebugger.XDebuggerManager
 import com.google.coroutinestacks.CoroutineStacksBundle.message
 import com.google.coroutinestacks.Node
 import com.google.coroutinestacks.buildCoroutineStackForest
+import com.intellij.openapi.ui.MessageType
+import com.intellij.xdebugger.impl.XDebuggerManagerImpl
+import org.jetbrains.kotlin.idea.debugger.coroutine.KotlinDebuggerCoroutinesBundle
 import org.jetbrains.kotlin.idea.debugger.coroutine.command.CoroutineDumpAction
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoCache
 import org.jetbrains.kotlin.idea.debugger.coroutine.data.CoroutineInfoData
@@ -268,12 +271,16 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
             val session = process.session
             process.managerThread.schedule(object : SuspendContextCommandImpl(suspendContext) {
                 override fun contextAction(suspendContext: SuspendContextImpl) {
+                    val coroutines = context.dispatcherToCoroutineDataList
+                        .values
+                        .flatten()
+                        .map { it.toCompleteCoroutineInfoData() }
+                    if (coroutines.isEmpty()) {
+                        return
+                    }
+
                     ApplicationManager.getApplication().invokeLater({
                         val ui = session.xDebugSession?.ui ?: return@invokeLater
-                        val coroutines = context.dispatcherToCoroutineDataList
-                            .values
-                            .flatten()
-                            .map { it.toCompleteCoroutineInfoData() }
                         CoroutineDumpAction().addCoroutineDump(project, coroutines, ui, session.searchScope)
                     }, ModalityState.NON_MODAL)
                 }
