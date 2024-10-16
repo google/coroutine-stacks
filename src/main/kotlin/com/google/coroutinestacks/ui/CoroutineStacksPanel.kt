@@ -68,7 +68,10 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
     private var zoomLevel = 0f
     private var isPanelAlreadyBuilt = false
     private var isToolWindowActive = false
+
+    // Creation frames are not fetched by Intellij IDEA since 2024.2
     private var addCreationFrames = false
+
     var areLibraryFramesAllowed = true
 
     private val panelBuilderListener = object : DebugProcessListener {
@@ -245,7 +248,7 @@ class CoroutineStacksPanel(private val project: Project) : JBPanelWithEmptyText(
         init {
             add(LibraryFrameToggle(context))
             add(CaptureDumpButton(context))
-            add(CreationFramesToggle(context))
+//            add(CreationFramesToggle(context))
             add(createHorizontalGlue())
             add(DispatcherDropdownMenu(context))
             add(createHorizontalGlue())
