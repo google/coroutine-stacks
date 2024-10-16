@@ -92,5 +92,5 @@ internal var JButton.transparent: Boolean
     set(state) {
         isOpaque = !state
         isContentAreaFilled = !state
-        isBorderPainted = false
+        isBorderPainted = !state
     }
